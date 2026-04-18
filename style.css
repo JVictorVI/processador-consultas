@@ -1,0 +1,1113 @@
+/* ── Variáveis ─────────────────────────────────────── */
+:root {
+  --bg: #0a0e1a;
+  --surface: #111827;
+  --surface2: #1a2235;
+  --border: #1e2d45;
+  --accent: #00e5ff;
+  --accent2: #7c3aed;
+  --success: #10b981;
+  --error: #ef4444;
+  --warn: #f59e0b;
+  --text: #e2e8f0;
+  --muted: #64748b;
+  --mono: "JetBrains Mono", monospace;
+  --sans: "Syne", sans-serif;
+  --sigma: #f472b6;
+  --pi: #34d399;
+  --join: #60a5fa;
+}
+
+/* ── Reset ──────────────────────────────────────────── */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ── Base ───────────────────────────────────────────── */
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Grade de fundo decorativa */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0, 229, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 229, 255, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Container ──────────────────────────────────────── */
+.container {
+  position: relative;
+  z-index: 1;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 28px 24px;
+}
+
+/* ── Header ─────────────────────────────────────────── */
+header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.logo-box {
+  width: 46px;
+  height: 46px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.header-text h1 {
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.header-text p {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-family: var(--mono);
+  margin-top: 2px;
+}
+
+.badges {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+
+.badge {
+  background: rgba(0, 229, 255, 0.1);
+  border: 1px solid rgba(0, 229, 255, 0.25);
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+
+.badge.hu2 {
+  background: rgba(124, 58, 237, 0.15);
+  border-color: rgba(124, 58, 237, 0.35);
+  color: #a78bfa;
+}
+
+/* ── Tabs ───────────────────────────────────────────── */
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px;
+  width: fit-content;
+}
+
+.tab {
+  padding: 7px 18px;
+  border-radius: 7px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--muted);
+  transition: all 0.15s;
+  border: none;
+  background: transparent;
+}
+
+.tab.active {
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.tab-panel {
+  display: none;
+}
+.tab-panel.active {
+  display: block;
+}
+
+/* ── Layout grid ────────────────────────────────────── */
+.main-grid {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 18px;
+}
+
+@media (max-width: 820px) {
+  .main-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── Card ───────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+.card-header .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+  flex-shrink: 0;
+}
+
+.card-header span {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ── Editor SQL ─────────────────────────────────────── */
+.editor-wrap {
+  position: relative;
+}
+
+.line-numbers {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 42px;
+  padding: 14px 8px;
+  background: var(--surface2);
+  border-right: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-align: right;
+  user-select: none;
+  line-height: 1.65;
+  pointer-events: none;
+}
+
+#sql-input {
+  width: 100%;
+  padding: 14px 14px 14px 56px;
+  min-height: 160px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 0.87rem;
+  line-height: 1.65;
+  resize: vertical;
+  caret-color: var(--accent);
+}
+
+.editor-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+.char-count {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  color: var(--muted);
+  margin-left: auto;
+}
+
+/* ── Exemplos rápidos ───────────────────────────────── */
+.examples-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.example-chip {
+  font-family: var(--mono);
+  font-size: 0.63rem;
+  padding: 3px 9px;
+  border-radius: 5px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.12s;
+  white-space: nowrap;
+}
+
+.example-chip:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ── Botões ─────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 16px;
+  border-radius: 8px;
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #0a0e1a;
+}
+.btn-primary:hover {
+  background: #33ebff;
+  transform: translateY(-1px);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+.btn-ghost:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+/* ── Status banner ──────────────────────────────────── */
+.status-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 9px;
+  margin-bottom: 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.status-banner.ok {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: var(--success);
+}
+
+.status-banner.err {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: var(--error);
+}
+
+/* ── Labels de seção ────────────────────────────────── */
+.section-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 7px;
+  margin-top: 12px;
+}
+
+/* ── Tokens ─────────────────────────────────────────── */
+.tokens-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.token {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  padding: 3px 7px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+}
+
+.token-keyword {
+  background: rgba(124, 58, 237, 0.18);
+  border-color: rgba(124, 58, 237, 0.4);
+  color: #a78bfa;
+}
+.token-table {
+  background: rgba(0, 229, 255, 0.1);
+  border-color: rgba(0, 229, 255, 0.28);
+  color: var(--accent);
+}
+.token-attr {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.28);
+  color: var(--success);
+}
+.token-op {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.28);
+  color: var(--warn);
+}
+.token-other {
+  background: var(--surface2);
+  border-color: var(--border);
+  color: var(--muted);
+}
+
+/* ── Lista de erros ─────────────────────────────────── */
+.error-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 8px;
+}
+
+.error-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 7px;
+  padding: 7px 11px;
+  font-size: 0.76rem;
+  color: #fca5a5;
+}
+
+.error-item span:first-child {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* ── Painéis de resultado ───────────────────────────── */
+#result-panel {
+  padding: 14px;
+}
+#algebra-panel {
+  padding: 14px;
+}
+
+.result-empty,
+.algebra-empty {
+  text-align: center;
+  padding: 36px 20px;
+  color: var(--muted);
+}
+
+.result-empty .empty-icon,
+.algebra-empty .empty-icon {
+  font-size: 2.2rem;
+  margin-bottom: 8px;
+}
+
+.result-empty p,
+.algebra-empty p {
+  font-size: 0.78rem;
+}
+
+/* ── Álgebra relacional — expressão ─────────────────── */
+.algebra-expr {
+  font-family: var(--mono);
+  font-size: 1rem;
+  line-height: 2.6;
+  padding: 20px 24px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 16px;
+  word-break: break-word;
+  letter-spacing: 0.01em;
+}
+
+/* ── Símbolos e conteúdo — associação visual por operador ── */
+
+/* π — projeção: verde */
+.s-pi {
+  color: var(--pi);
+  font-weight: 800;
+  font-size: 1.1em;
+}
+.s-proj {
+  color: #86efac;
+} /* verde suave — atributos do π */
+
+/* σ — seleção: rosa */
+.s-sigma {
+  color: var(--sigma);
+  font-weight: 800;
+  font-size: 1.1em;
+}
+.s-sigma-cond {
+  color: #f9a8d4;
+} /* rosa suave — condição do σ */
+
+/* ⋈ — junção: azul */
+.s-join {
+  color: var(--join);
+  font-weight: 800;
+  font-size: 1.1em;
+}
+.s-join-cond {
+  color: #93c5fd;
+} /* azul suave — condição do ⋈ */
+
+/* Relações (tabelas): ciano exclusivo */
+.s-rel {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Parênteses: cinza discreto */
+.s-paren {
+  color: #475569;
+}
+
+/* Subscrito genérico: tamanho reduzido, bem legível */
+.s-sub {
+  font-size: 0.72em;
+  vertical-align: sub;
+  line-height: 0;
+  display: inline;
+  letter-spacing: 0;
+}
+
+/* ── Passo a passo ──────────────────────────────────── */
+.steps-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.step-card {
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.step-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--surface2);
+  font-size: 0.73rem;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+
+.step-header:hover {
+  background: var(--border);
+}
+
+.step-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.step-body {
+  padding: 10px 14px;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  line-height: 2;
+  display: none;
+  background: rgba(0, 0, 0, 0.2);
+  border-top: 1px solid var(--border);
+  word-break: break-word;
+}
+
+.step-body.open {
+  display: block;
+}
+
+.step-desc {
+  color: var(--muted);
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+/* ── Legenda de símbolos ────────────────────────────── */
+.sym-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+}
+
+.sym-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.sym-glyph {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+/* ── Schema sidebar ─────────────────────────────────── */
+.schema-list {
+  padding: 8px 10px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.schema-list::-webkit-scrollbar {
+  width: 3px;
+}
+.schema-list::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+
+.schema-table-card {
+  margin-bottom: 8px;
+  border-radius: 7px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.schema-table-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  background: var(--surface2);
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent);
+  user-select: none;
+}
+
+.schema-table-header:hover {
+  background: var(--border);
+}
+
+.schema-fields {
+  padding: 4px 0;
+  display: none;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.schema-fields.open {
+  display: block;
+}
+
+.schema-field {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 2px 12px;
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  color: var(--muted);
+}
+
+.field-name {
+  color: var(--text);
+}
+.pk {
+  color: var(--warn);
+}
+.fk-c {
+  color: #a78bfa;
+}
+
+/* ── Grid de operadores ─────────────────────────────── */
+.ops-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+  gap: 5px;
+  padding: 10px;
+}
+
+.op-chip {
+  text-align: center;
+  padding: 5px 3px;
+  border-radius: 5px;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--warn);
+}
+
+/* ── Legenda de tokens ──────────────────────────────── */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 9px 14px;
+  border-top: 1px solid var(--border);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.66rem;
+  color: var(--muted);
+}
+
+.legend-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+}
+
+/* ── Botão copiar ───────────────────────────────────── */
+.copy-btn {
+  margin-left: auto;
+  font-size: 0.68rem;
+  padding: 4px 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: var(--mono);
+}
+
+.copy-btn:hover {
+  color: var(--text);
+}
+
+/* ── Animações ──────────────────────────────────────── */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-in {
+  animation: fadeIn 0.2s ease forwards;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.pulse {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* ═══════════════════════════════════════════════════════
+   HU3 — GRAFO DE OPERADORES
+═══════════════════════════════════════════════════════ */
+
+/* Badge HU3 */
+.badge.hu3 {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: var(--success);
+}
+
+/* Painel vazio */
+.tree-empty {
+  text-align: center;
+  padding: 36px 20px;
+  color: var(--muted);
+}
+.tree-empty .empty-icon {
+  font-size: 2.2rem;
+  margin-bottom: 8px;
+}
+.tree-empty p {
+  font-size: 0.78rem;
+}
+
+/* Legenda: sample de relação */
+.tree-rel-sample {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  background: rgba(0, 229, 255, 0.15);
+  border: 1px solid rgba(0, 229, 255, 0.4);
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+/* ── Container da árvore ────────────────────────────── */
+.exec-tree {
+  padding: 24px 20px 20px;
+  overflow-x: auto;
+}
+
+/* ── Nível: coluna centralizada de nós ──────────────── */
+.tree-level {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+
+/* ── Nó genérico ────────────────────────────────────── */
+.tree-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+
+/* ── Caixa do nó ────────────────────────────────────── */
+.tree-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid;
+  min-width: 64px;
+  text-align: center;
+  position: relative;
+  z-index: 1;
+  cursor: default;
+  transition: transform 0.12s;
+}
+.tree-box:hover {
+  transform: translateY(-2px);
+}
+
+/* ── Tipos de nó por cor ────────────────────────────── */
+.tree-box.node-pi {
+  background: rgba(52, 211, 153, 0.12);
+  border-color: rgba(52, 211, 153, 0.4);
+}
+.tree-box.node-sigma {
+  background: rgba(244, 114, 182, 0.12);
+  border-color: rgba(244, 114, 182, 0.4);
+}
+.tree-box.node-join {
+  background: rgba(96, 165, 250, 0.12);
+  border-color: rgba(96, 165, 250, 0.4);
+}
+.tree-box.node-rel {
+  background: rgba(0, 229, 255, 0.1);
+  border-color: rgba(0, 229, 255, 0.35);
+}
+
+/* ── Símbolo principal do nó ────────────────────────── */
+.tree-symbol {
+  font-family: var(--mono);
+  font-size: 1.2rem;
+  font-weight: 800;
+  line-height: 1;
+}
+.node-pi .tree-symbol {
+  color: var(--pi);
+}
+.node-sigma .tree-symbol {
+  color: var(--sigma);
+}
+.node-join .tree-symbol {
+  color: var(--join);
+}
+.node-rel .tree-symbol {
+  color: var(--accent);
+  font-size: 0.85rem;
+}
+
+/* ── Rótulo/condição abaixo do símbolo ─────────────── */
+.tree-label {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  line-height: 1.3;
+  max-width: 180px;
+  word-break: break-word;
+  text-align: center;
+}
+.node-pi .tree-label {
+  color: #86efac;
+}
+.node-sigma .tree-label {
+  color: #f9a8d4;
+}
+.node-join .tree-label {
+  color: #93c5fd;
+}
+.node-rel .tree-label {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.72rem;
+}
+
+/* ── Conector vertical (linha de pai para filho) ────── */
+.tree-connector {
+  width: 2px;
+  height: 28px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+/* ── Linha horizontal que une dois filhos ───────────── */
+.tree-children {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  position: relative;
+}
+
+/* Barra horizontal entre dois nós filhos */
+.tree-children::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  height: 2px;
+  background: var(--border);
+  width: calc(100% - 80px);
+  /* largura calculada via JS com style inline */
+}
+
+.tree-child-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Linha vertical descendo do centro de cada filho */
+.tree-child-line {
+  width: 2px;
+  height: 28px;
+  background: var(--border);
+}
+
+/* Espaçamento horizontal entre os dois galhos */
+.tree-branch-gap {
+  width: 48px;
+  flex-shrink: 0;
+}
+
+/* ── Conector com seta indicando fluxo ascendente ───── */
+.tree-connector--flow {
+  background: linear-gradient(to top, var(--accent) 0%, var(--border) 100%);
+  position: relative;
+}
+/* seta no topo do conector vertical (↑ fluxo sobe) */
+.tree-connector.tree-connector--flow::before,
+.tree-child-line.tree-connector--flow::before {
+  content: "▲";
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.5rem;
+  color: var(--accent);
+  opacity: 0.7;
+}
+
+/* ── Hint de leitura ────────────────────────────────── */
+.graph-reading-hint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 14px 0;
+  padding: 8px 12px;
+  background: rgba(0, 229, 255, 0.06);
+  border: 1px solid rgba(0, 229, 255, 0.18);
+  border-radius: 8px;
+  font-size: 0.74rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.graph-hint-icon {
+  font-size: 1rem;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+/* ── Tabelas do grafo em memória ────────────────────── */
+.graph-info-wrap {
+  padding: 0 14px 16px;
+}
+
+.graph-table-wrap {
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.graph-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+}
+
+.graph-table thead tr {
+  background: var(--surface2);
+}
+
+.graph-table th {
+  padding: 6px 10px;
+  text-align: left;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.graph-table td {
+  padding: 5px 10px;
+  border-bottom: 1px solid rgba(30, 45, 69, 0.5);
+  vertical-align: middle;
+}
+
+.graph-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.graph-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* Células específicas */
+.gt-id {
+  color: var(--muted);
+  font-size: 0.65rem;
+}
+.gt-label {
+  color: var(--text);
+  max-width: 320px;
+  word-break: break-word;
+}
+.gt-arrow {
+  color: var(--accent);
+  text-align: center;
+  font-size: 0.9rem;
+}
+.gt-kind {
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* Tipo colorido por operador */
+.gt-type {
+  font-weight: 600;
+}
+.gt-type-pi {
+  color: var(--pi);
+}
+.gt-type-sigma {
+  color: var(--sigma);
+}
+.gt-type-equi,
+.gt-type-theta {
+  color: var(--join);
+}
+.gt-type-rel {
+  color: var(--accent);
+}
+
+/* Badges de papel */
+.gt-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.gt-root {
+  background: rgba(52, 211, 153, 0.15);
+  color: var(--pi);
+  border: 1px solid rgba(52, 211, 153, 0.35);
+}
+.gt-leaf {
+  background: rgba(0, 229, 255, 0.12);
+  color: var(--accent);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+}
+.gt-inner {
+  background: rgba(100, 116, 139, 0.12);
+  color: var(--muted);
+  border: 1px solid rgba(100, 116, 139, 0.25);
+}
+
+/* ── Legenda da aresta ──────────────────────────────── */
+.edge-legend-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: rgba(0, 229, 255, 0.1);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  border-radius: 4px;
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 700;
+}

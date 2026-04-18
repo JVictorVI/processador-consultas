@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Processador de Consultas SQL</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="container">
+      <!-- ═══════════════════════ HEADER ═══════════════════════ -->
+      <header>
+        <div class="logo-box">⚡</div>
+        <div class="header-text">
+          <h1>Processador de Consultas SQL</h1>
+          <p>Validação · Álgebra Relacional · Grafo de Operadores</p>
+        </div>
+        <div class="badges">
+          <div class="badge">HU1</div>
+          <div class="badge hu2">HU2</div>
+          <div class="badge hu3">HU3</div>
+        </div>
+      </header>
+
+      <!-- ═══════════════════════ TABS ════════════════════════ -->
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('validacao')">
+          ① Validação (HU1)
+        </button>
+        <button class="tab" onclick="switchTab('algebra')">
+          ② Álgebra Relacional (HU2)
+        </button>
+        <button class="tab" onclick="switchTab('grafo')">
+          ③ Grafo de Operadores (HU3)
+        </button>
+      </div>
+
+      <!-- ═══════════════════════ GRID ════════════════════════ -->
+      <div class="main-grid">
+        <!-- ───────────── COLUNA PRINCIPAL ───────────── -->
+        <div class="col">
+          <!-- Editor SQL -->
+          <div class="card">
+            <div class="card-header">
+              <div class="dot"></div>
+              <span>Editor SQL</span>
+            </div>
+
+            <!-- Chips de exemplos rápidos -->
+            <div class="examples-list">
+              <div class="example-chip" onclick="loadEx(0)">SELECT simples</div>
+              <div class="example-chip" onclick="loadEx(1)">WHERE</div>
+              <div class="example-chip" onclick="loadEx(2)">JOIN + WHERE</div>
+              <div class="example-chip" onclick="loadEx(3)">Multi-JOIN</div>
+              <div class="example-chip" onclick="loadEx(4)">WHERE composto</div>
+              <div class="example-chip" onclick="loadEx(5)">SELECT *</div>
+              <div class="example-chip" onclick="loadEx(6)">Erro: tabela</div>
+              <div class="example-chip" onclick="loadEx(7)">Erro: atributo</div>
+              <div class="example-chip" onclick="loadEx(8)">Erro: sem ON</div>
+              <div class="example-chip" onclick="loadEx(9)">Erro: operador</div>
+            </div>
+
+            <!-- Área de edição com numeração de linhas -->
+            <div class="editor-wrap">
+              <div class="line-numbers" id="ln">1</div>
+              <textarea
+                id="sql-input"
+                spellcheck="false"
+                placeholder="Digite sua consulta SQL aqui..."
+              ></textarea>
+            </div>
+
+            <div class="editor-footer">
+              <button class="btn btn-primary" onclick="processar()">
+                ▶ Processar
+              </button>
+              <button class="btn btn-ghost" onclick="limpar()">✕ Limpar</button>
+              <span class="char-count" id="cc">0 chars</span>
+            </div>
+          </div>
+
+          <!-- ──── Painel HU1 – Validação ──── -->
+          <div class="tab-panel active" id="panel-validacao">
+            <div class="card">
+              <div class="card-header">
+                <div
+                  class="dot"
+                  id="dot-v"
+                  style="background: var(--muted); box-shadow: none"
+                ></div>
+                <span>Resultado da Validação (HU1)</span>
+              </div>
+
+              <div id="result-panel">
+                <div class="result-empty">
+                  <div class="empty-icon pulse">🔍</div>
+                  <p>Digite e clique em <strong>Processar</strong></p>
+                </div>
+              </div>
+
+              <!-- Legenda de cores dos tokens -->
+              <div class="legend">
+                <div class="legend-item">
+                  <div class="legend-dot" style="background: #a78bfa"></div>
+                  Palavra-chave
+                </div>
+                <div class="legend-item">
+                  <div
+                    class="legend-dot"
+                    style="background: var(--accent)"
+                  ></div>
+                  Tabela
+                </div>
+                <div class="legend-item">
+                  <div
+                    class="legend-dot"
+                    style="background: var(--success)"
+                  ></div>
+                  Atributo
+                </div>
+                <div class="legend-item">
+                  <div class="legend-dot" style="background: var(--warn)"></div>
+                  Operador
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ──── Painel HU2 – Álgebra Relacional ──── -->
+          <div class="tab-panel" id="panel-algebra">
+            <div class="card">
+              <div class="card-header">
+                <div
+                  class="dot"
+                  id="dot-a"
+                  style="background: var(--muted); box-shadow: none"
+                ></div>
+                <span>Álgebra Relacional (HU2)</span>
+                <button
+                  class="copy-btn"
+                  id="copy-btn"
+                  style="display: none"
+                  onclick="copiarAlgebra()"
+                >
+                  ⧉ Copiar
+                </button>
+              </div>
+
+              <div id="algebra-panel">
+                <div class="algebra-empty">
+                  <div class="empty-icon pulse" style="font-size: 2rem">
+                    π σ ⋈
+                  </div>
+                  <p>Expressão gerada após processar uma consulta válida</p>
+                </div>
+              </div>
+
+              <!-- Legenda dos símbolos algébricos -->
+              <div class="sym-legend">
+                <div class="sym-item">
+                  <span class="sym-glyph s-pi">π</span>Projeção — SELECT
+                </div>
+                <div class="sym-item">
+                  <span class="sym-glyph s-sigma">σ</span>Seleção — WHERE
+                </div>
+                <div class="sym-item">
+                  <span class="sym-glyph s-join"
+                    >⋈<sub style="font-size: 0.6em">A=B</sub></span
+                  >Equijunção
+                </div>
+                <div class="sym-item">
+                  <span class="sym-glyph s-join"
+                    >⋈<sub style="font-size: 0.6em">θ</sub></span
+                  >Junção-θ
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ──── Painel HU3 – Grafo de Operadores ──── -->
+          <div class="tab-panel" id="panel-grafo">
+            <div class="card">
+              <div class="card-header">
+                <div
+                  class="dot"
+                  id="dot-p"
+                  style="background: var(--muted); box-shadow: none"
+                ></div>
+                <span>Grafo de Operadores — Árvore de Consulta (HU3)</span>
+              </div>
+
+              <div id="grafo-panel">
+                <div class="tree-empty">
+                  <div class="empty-icon pulse" style="font-size: 2rem">🌳</div>
+                  <p>Grafo gerado após processar uma consulta válida</p>
+                </div>
+              </div>
+
+              <!-- Legenda dos nós do grafo -->
+              <div class="sym-legend">
+                <div class="sym-item">
+                  <span class="sym-glyph s-pi">π</span>Projeção — raiz
+                </div>
+                <div class="sym-item">
+                  <span class="sym-glyph s-sigma">σ</span>Seleção
+                </div>
+                <div class="sym-item">
+                  <span class="sym-glyph s-join">⋈</span>Junção
+                </div>
+                <div class="sym-item">
+                  <span class="tree-rel-sample">R</span>Relação — folha
+                </div>
+                <div class="sym-item">
+                  <span class="edge-legend-arrow">↑</span>Resultado
+                  intermediário
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- /col principal -->
+
+        <!-- ───────────── SIDEBAR ───────────── -->
+        <div class="col">
+          <!-- Modelo de dados -->
+          <div class="card">
+            <div class="card-header">
+              <div
+                class="dot"
+                style="background: #a78bfa; box-shadow: 0 0 8px #a78bfa"
+              ></div>
+              <span>Modelo de Dados</span>
+            </div>
+            <div class="schema-list" id="schema-list"></div>
+          </div>
+
+          <!-- Operadores válidos -->
+          <div class="card">
+            <div class="card-header">
+              <div
+                class="dot"
+                style="background: var(--warn); box-shadow: 0 0 8px var(--warn)"
+              ></div>
+              <span>Operadores Válidos</span>
+            </div>
+            <div class="ops-grid">
+              <div class="op-chip">=</div>
+              <div class="op-chip">&gt;</div>
+              <div class="op-chip">&lt;</div>
+              <div class="op-chip">&gt;=</div>
+              <div class="op-chip">&lt;=</div>
+              <div class="op-chip">&lt;&gt;</div>
+              <div class="op-chip">AND</div>
+              <div class="op-chip">( )</div>
+              <div class="op-chip">SELECT</div>
+              <div class="op-chip">FROM</div>
+              <div class="op-chip">WHERE</div>
+              <div class="op-chip">JOIN</div>
+              <div class="op-chip">ON</div>
+            </div>
+          </div>
+        </div>
+        <!-- /sidebar -->
+      </div>
+      <!-- /main-grid -->
+    </div>
+    <!-- /container -->
+
+    <script src="scripts/schema.js"></script>
+    <script src="scripts/parser.js"></script>
+    <script src="scripts/algebra.js"></script>
+    <script src="scripts/grafo.js"></script>
+    <script src="scripts/app.js"></script>
+  </body>
+</html>
