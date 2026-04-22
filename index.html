@@ -12,7 +12,6 @@
   </head>
   <body>
     <div class="container">
-      <!-- ═══════════════════════ HEADER ═══════════════════════ -->
       <header>
         <div class="logo-box">⚡</div>
         <div class="header-text">
@@ -26,7 +25,6 @@
         </div>
       </header>
 
-      <!-- ═══════════════════════ TABS ════════════════════════ -->
       <div class="tabs">
         <button class="tab active" onclick="switchTab('validacao')">
           ① Validação (HU1)
@@ -37,20 +35,19 @@
         <button class="tab" onclick="switchTab('grafo')">
           ③ Grafo de Operadores (HU3)
         </button>
+        <button class="tab" onclick="switchTab('plano')">
+          ⑤ Plano de Execução (HU5)
+        </button>
       </div>
 
-      <!-- ═══════════════════════ GRID ════════════════════════ -->
       <div class="main-grid">
-        <!-- ───────────── COLUNA PRINCIPAL ───────────── -->
         <div class="col">
-          <!-- Editor SQL -->
           <div class="card">
             <div class="card-header">
               <div class="dot"></div>
               <span>Editor SQL</span>
             </div>
 
-            <!-- Chips de exemplos rápidos -->
             <div class="examples-list">
               <div class="example-chip" onclick="loadEx(0)">SELECT simples</div>
               <div class="example-chip" onclick="loadEx(1)">WHERE</div>
@@ -64,7 +61,6 @@
               <div class="example-chip" onclick="loadEx(9)">Erro: operador</div>
             </div>
 
-            <!-- Área de edição com numeração de linhas -->
             <div class="editor-wrap">
               <div class="line-numbers" id="ln">1</div>
               <textarea
@@ -83,7 +79,6 @@
             </div>
           </div>
 
-          <!-- ──── Painel HU1 – Validação ──── -->
           <div class="tab-panel active" id="panel-validacao">
             <div class="card">
               <div class="card-header">
@@ -102,7 +97,6 @@
                 </div>
               </div>
 
-              <!-- Legenda de cores dos tokens -->
               <div class="legend">
                 <div class="legend-item">
                   <div class="legend-dot" style="background: #a78bfa"></div>
@@ -130,7 +124,6 @@
             </div>
           </div>
 
-          <!-- ──── Painel HU2 – Álgebra Relacional ──── -->
           <div class="tab-panel" id="panel-algebra">
             <div class="card">
               <div class="card-header">
@@ -159,7 +152,6 @@
                 </div>
               </div>
 
-              <!-- Legenda dos símbolos algébricos -->
               <div class="sym-legend">
                 <div class="sym-item">
                   <span class="sym-glyph s-pi">π</span>Projeção — SELECT
@@ -181,7 +173,6 @@
             </div>
           </div>
 
-          <!-- ──── Painel HU3 – Grafo de Operadores ──── -->
           <div class="tab-panel" id="panel-grafo">
             <div class="card">
               <div class="card-header">
@@ -200,7 +191,6 @@
                 </div>
               </div>
 
-              <!-- Legenda dos nós do grafo -->
               <div class="sym-legend">
                 <div class="sym-item">
                   <span class="sym-glyph s-pi">π</span>Projeção — raiz
@@ -215,18 +205,30 @@
                   <span class="tree-rel-sample">R</span>Relação — folha
                 </div>
                 <div class="sym-item">
-                  <span class="edge-legend-arrow">↑</span>Resultado
-                  intermediário
+                  <span class="edge-legend-arrow">↑</span>Resultado intermediário
                 </div>
               </div>
             </div>
           </div>
-        </div>
-        <!-- /col principal -->
 
-        <!-- ───────────── SIDEBAR ───────────── -->
+          <div class="tab-panel" id="panel-plano">
+            <div class="card">
+              <div class="card-header">
+                <div class="dot" id="dot-e" style="background: var(--muted); box-shadow: none"></div>
+                <span>Plano de Execução (HU5)</span>
+              </div>
+
+              <div id="plano-panel">
+                <div class="tree-empty">
+                  <div class="empty-icon pulse" style="font-size: 2rem">📋</div>
+                  <p>Plano de execução gerado após processar uma consulta.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
         <div class="col">
-          <!-- Modelo de dados -->
           <div class="card">
             <div class="card-header">
               <div
@@ -238,7 +240,6 @@
             <div class="schema-list" id="schema-list"></div>
           </div>
 
-          <!-- Operadores válidos -->
           <div class="card">
             <div class="card-header">
               <div
@@ -264,16 +265,13 @@
             </div>
           </div>
         </div>
-        <!-- /sidebar -->
+        </div>
       </div>
-      <!-- /main-grid -->
-    </div>
-    <!-- /container -->
-
     <script src="scripts/schema.js"></script>
     <script src="scripts/parser.js"></script>
     <script src="scripts/algebra.js"></script>
     <script src="scripts/grafo.js"></script>
+    <script src="scripts/plano.js"></script>
     <script src="scripts/app.js"></script>
   </body>
 </html>

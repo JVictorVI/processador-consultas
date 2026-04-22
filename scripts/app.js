@@ -210,6 +210,15 @@ function processar() {
       dotP.style.background = "var(--success)";
       dotP.style.boxShadow = "0 0 8px var(--success)";
       grafoPanel.innerHTML = renderGrafo(result.tree, graph);
+      
+      // HU5 — sucesso: gera e renderiza o plano de execução
+      const dotE = document.getElementById("dot-e");
+      const planoPanel = document.getElementById("plano-panel");
+      if (dotE && planoPanel) {
+        dotE.style.background = "var(--success)";
+        dotE.style.boxShadow = "0 0 8px var(--success)";
+        planoPanel.innerHTML = renderPlanoExecucao(result.tree);
+      }
     }
   }
 }
@@ -249,16 +258,26 @@ function limpar() {
   document.getElementById("sql-input").value = "";
   document.getElementById("cc").textContent = "0 chars";
   document.getElementById("ln").textContent = "1";
+  
   document.getElementById("result-panel").innerHTML =
     `<div class="result-empty"><div class="empty-icon pulse">🔍</div><p>Digite e clique em <strong>Processar</strong></p></div>`;
+  
   document.getElementById("algebra-panel").innerHTML =
     `<div class="algebra-empty"><div class="empty-icon pulse" style="font-size:2rem">π σ ⋈</div><p>Expressão gerada após processar uma consulta válida</p></div>`;
+  
   document.getElementById("grafo-panel").innerHTML =
     `<div class="tree-empty"><div class="empty-icon pulse" style="font-size:2rem">🌳</div><p>Grafo gerado após processar uma consulta válida</p></div>`;
-  ["dot-v", "dot-a", "dot-p"].forEach((id) => {
+
+  // ── ADICIONADO PARA A HU5 ──
+  document.getElementById("plano-panel").innerHTML =
+    `<div class="tree-empty"><div class="empty-icon pulse" style="font-size: 2rem">📋</div><p>Plano de execução gerado após processar uma consulta.</p></div>`;
+
+  // O "dot-e" foi incluído na lista para resetar a cor da aba HU5
+  ["dot-v", "dot-a", "dot-p", "dot-e"].forEach((id) => {
     document.getElementById(id).style.background = "var(--muted)";
     document.getElementById(id).style.boxShadow = "none";
   });
+  
   document.getElementById("copy-btn").style.display = "none";
 }
 
