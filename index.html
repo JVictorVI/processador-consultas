@@ -17,12 +17,13 @@
         <div class="logo-box">⚡</div>
         <div class="header-text">
           <h1>Processador de Consultas SQL</h1>
-          <p>Validação · Álgebra Relacional · Grafo de Operadores</p>
+          <p>Validação · Álgebra Relacional · Grafo de Operadores · Otimização</p>
         </div>
         <div class="badges">
           <div class="badge">HU1</div>
           <div class="badge hu2">HU2</div>
           <div class="badge hu3">HU3</div>
+          <div class="badge hu4">HU4</div>
         </div>
       </header>
 
@@ -36,6 +37,9 @@
         </button>
         <button class="tab" onclick="switchTab('grafo')">
           ③ Grafo de Operadores (HU3)
+        </button>
+        <button class="tab" onclick="switchTab('otimizacao')">
+          ④ Otimização (HU4)
         </button>
       </div>
 
@@ -217,6 +221,27 @@
                 <div class="sym-item">
                   <span class="edge-legend-arrow">↑</span>Resultado
                   intermediário
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ──── Painel HU4 – Otimização ──── -->
+          <div class="tab-panel" id="panel-otimizacao">
+            <div class="card">
+              <div class="card-header">
+                <div
+                  class="dot"
+                  id="dot-o"
+                  style="background: var(--muted); box-shadow: none"
+                ></div>
+                <span>Otimização da Consulta (HU4)</span>
+              </div>
+
+              <div id="otimizacao-panel">
+                <div class="otimizacao-empty">
+                  <div class="empty-icon pulse" style="font-size: 2rem">⚡</div>
+                  <p>Árvore otimizada após processar uma consulta válida</p>
                 </div>
               </div>
             </div>

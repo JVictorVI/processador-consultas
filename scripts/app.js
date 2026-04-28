@@ -92,8 +92,39 @@ function toggleStep(el) {
 }
 
 // ═══════════════════════════════════════════════════════
-//  RENDER — VALIDAÇÃO (HU1)
+//  RENDER — OTIMIZAÇÃO (HU4)
 // ═══════════════════════════════════════════════════════
+function renderOtimizacao(optResult, optimizedGraph) {
+  const { optimizedTree, optSteps } = optResult;
+  let h = `<div class="animate-in">`;
+  h += `<div class="section-label">Árvore Otimizada</div>`;
+  h += `<div class="algebra-expr">${treeToHtml(optimizedTree)}</div>`;
+  h += `<div class="section-label">Passos de Otimização</div>`;
+  h += `<div class="steps-wrap">`;
+  optSteps.forEach((s, i) => {
+    const icon = s.type === 'push-sigma' ? 'σ' : s.type === 'push-pi' ? 'π' : '⋈';
+    h += `<div class="step-card">
+      <div class="step-header" onclick="toggleStep(this)">
+        <div class="step-num" style="background:var(--warn)22;color:var(--warn);border:1px solid var(--warn)55">${i + 1}</div>
+        <span style="color:var(--warn);font-size:.9rem">${icon}</span>
+        <span style="color:var(--text)">${esc(s.label)}</span>
+        <span style="margin-left:auto;color:var(--muted);font-size:.65rem">▾</span>
+      </div>
+      <div class="step-body">
+        <div class="step-desc">${esc(s.desc)}</div>
+        <div>${treeToHtml(s.tree)}</div>
+      </div>
+    </div>`;
+  });
+  h += `</div>`;
+
+  // Adicionar o grafo otimizado
+  h += `<div class="section-label">Grafo Otimizado</div>`;
+  h += buildGraphHtml(optimizedTree);
+
+  h += `</div>`;
+  return h;
+}
 function renderValidacao(errors, tokens, aliases, usedTables) {
   const ok = errors.length === 0;
   const dot = document.getElementById("dot-v");
@@ -170,6 +201,10 @@ function processar() {
   const dotP = document.getElementById("dot-p");
   const grafoPanel = document.getElementById("grafo-panel");
 
+  // ── HU4: Otimização ───────────────────────────────────
+  const dotO = document.getElementById("dot-o");
+  const otimizacaoPanel = document.getElementById("otimizacao-panel");
+
   const ERR_MSG_HU2 = `<div style="padding:14px">
     <div class="status-banner err">
       <span>✕</span>
@@ -184,6 +219,13 @@ function processar() {
     </div>
   </div>`;
 
+  const ERR_MSG_HU4 = `<div style="padding:14px">
+    <div class="status-banner err">
+      <span>✕</span>
+      <span>Corrija os erros de validação (HU1) antes de otimizar a consulta.</span>
+    </div>
+  </div>`;
+
   if (errors.length > 0) {
     // HU2 — erro
     dotA.style.background = "var(--error)";
@@ -195,6 +237,11 @@ function processar() {
     dotP.style.background = "var(--error)";
     dotP.style.boxShadow = "0 0 8px var(--error)";
     grafoPanel.innerHTML = ERR_MSG_HU3;
+
+    // HU4 — erro
+    dotO.style.background = "var(--error)";
+    dotO.style.boxShadow = "0 0 8px var(--error)";
+    otimizacaoPanel.innerHTML = ERR_MSG_HU4;
   } else {
     const result = toAlgebra(parsed);
     if (result) {
@@ -210,6 +257,13 @@ function processar() {
       dotP.style.background = "var(--success)";
       dotP.style.boxShadow = "0 0 8px var(--success)";
       grafoPanel.innerHTML = renderGrafo(result.tree, graph);
+
+      // HU4 — sucesso: otimiza a árvore e renderiza
+      const optResult = optimizeTree(result.tree);
+      const optimizedGraph = astToGraph(optResult.optimizedTree);
+      dotO.style.background = "var(--warn)";
+      dotO.style.boxShadow = "0 0 8px var(--warn)";
+      otimizacaoPanel.innerHTML = `<div style="padding:14px">${renderOtimizacao(optResult, optimizedGraph)}</div>`;
     }
   }
 }
@@ -255,7 +309,9 @@ function limpar() {
     `<div class="algebra-empty"><div class="empty-icon pulse" style="font-size:2rem">π σ ⋈</div><p>Expressão gerada após processar uma consulta válida</p></div>`;
   document.getElementById("grafo-panel").innerHTML =
     `<div class="tree-empty"><div class="empty-icon pulse" style="font-size:2rem">🌳</div><p>Grafo gerado após processar uma consulta válida</p></div>`;
-  ["dot-v", "dot-a", "dot-p"].forEach((id) => {
+  document.getElementById("otimizacao-panel").innerHTML =
+    `<div class="otimizacao-empty"><div class="empty-icon pulse" style="font-size:2rem">⚡</div><p>Árvore otimizada após processar uma consulta válida</p></div>`;
+  ["dot-v", "dot-a", "dot-p", "dot-o"].forEach((id) => {
     document.getElementById(id).style.background = "var(--muted)";
     document.getElementById(id).style.boxShadow = "none";
   });
