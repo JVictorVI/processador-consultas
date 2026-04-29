@@ -102,7 +102,8 @@ function renderOtimizacao(optResult, optimizedGraph) {
   h += `<div class="section-label">Passos de Otimização</div>`;
   h += `<div class="steps-wrap">`;
   optSteps.forEach((s, i) => {
-    const icon = s.type === 'push-sigma' ? 'σ' : s.type === 'push-pi' ? 'π' : '⋈';
+    const icon =
+      s.type === "push-sigma" ? "σ" : s.type === "push-pi" ? "π" : "⋈";
     h += `<div class="step-card">
       <div class="step-header" onclick="toggleStep(this)">
         <div class="step-num" style="background:var(--warn)22;color:var(--warn);border:1px solid var(--warn)55">${i + 1}</div>
@@ -266,10 +267,18 @@ function processar() {
       otimizacaoPanel.innerHTML = `<div style="padding:14px">${renderOtimizacao(optResult, optimizedGraph)}</div>`;
 
       initGraphPanAndCenter();
+
+      // HU5 — sucesso: gera e renderiza o plano de execução
+      const dotE = document.getElementById("dot-e");
+      const planoPanel = document.getElementById("plano-panel");
+      if (dotE && planoPanel) {
+        dotE.style.background = "var(--success)";
+        dotE.style.boxShadow = "0 0 8px var(--success)";
+        planoPanel.innerHTML = renderPlanoExecucao(result.tree);
+      }
     }
   }
 }
-
 
 // ═══════════════════════════════════════════════════════
 //  GRAFO — clicar e arrastar para explorar
@@ -355,12 +364,16 @@ function enableGraphPan(el) {
   el.addEventListener("pointerleave", stopPan);
 
   // Evita seleção/click acidental quando o usuário arrastou o grafo.
-  el.addEventListener("click", (ev) => {
-    if (!moved) return;
-    ev.preventDefault();
-    ev.stopPropagation();
-    moved = false;
-  }, true);
+  el.addEventListener(
+    "click",
+    (ev) => {
+      if (!moved) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      moved = false;
+    },
+    true,
+  );
 }
 
 function copiarAlgebra() {
@@ -399,18 +412,29 @@ function limpar() {
   document.getElementById("sql-input").value = "";
   document.getElementById("cc").textContent = "0 chars";
   document.getElementById("ln").textContent = "1";
+
   document.getElementById("result-panel").innerHTML =
     `<div class="result-empty"><div class="empty-icon pulse">🔍</div><p>Digite e clique em <strong>Processar</strong></p></div>`;
+
   document.getElementById("algebra-panel").innerHTML =
     `<div class="algebra-empty"><div class="empty-icon pulse" style="font-size:2rem">π σ ⋈</div><p>Expressão gerada após processar uma consulta válida</p></div>`;
+
   document.getElementById("grafo-panel").innerHTML =
     `<div class="tree-empty"><div class="empty-icon pulse" style="font-size:2rem">🌳</div><p>Grafo gerado após processar uma consulta válida</p></div>`;
   document.getElementById("otimizacao-panel").innerHTML =
     `<div class="otimizacao-empty"><div class="empty-icon pulse" style="font-size:2rem">⚡</div><p>Árvore otimizada após processar uma consulta válida</p></div>`;
-  ["dot-v", "dot-a", "dot-p", "dot-o"].forEach((id) => {
+  ["dot-v", "dot-a", "dot-p", "dot-o"].forEach((id) => {});
+
+  // ── ADICIONADO PARA A HU5 ──
+  document.getElementById("plano-panel").innerHTML =
+    `<div class="tree-empty"><div class="empty-icon pulse" style="font-size: 2rem">📋</div><p>Plano de execução gerado após processar uma consulta.</p></div>`;
+
+  // O "dot-e" foi incluído na lista para resetar a cor da aba HU5
+  ["dot-v", "dot-a", "dot-p", "dot-e"].forEach((id) => {
     document.getElementById(id).style.background = "var(--muted)";
     document.getElementById(id).style.boxShadow = "none";
   });
+
   document.getElementById("copy-btn").style.display = "none";
 }
 
