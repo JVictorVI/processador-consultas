@@ -7,9 +7,6 @@
 function formatRelForPlan(node) {
   if (!node) return '';
   if (typeof relLabel === 'function') return relLabel(node);
-  if (node.alias && String(node.alias).toUpperCase() !== String(node.name).toUpperCase()) {
-    return `${node.name} ${node.alias}`;
-  }
   return node.name || '';
 }
 

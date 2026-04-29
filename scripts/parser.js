@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════
    PROCESSADOR DE CONSULTAS SQL — HU1
-   parser.js — Validação e parsing da consulta SQL sem suporte a aliases
+   parser.js — Validação e parsing da consulta SQL sem suporte a apelidos de tabela
    Depende de: schema.js
 ═══════════════════════════════════════════════════════ */
 "use strict";
@@ -45,14 +45,13 @@ function tokenize(sql) {
   return toks;
 }
 
-function classifyTok(tok, aliases) {
+function classifyTok(tok) {
   const u = tok.toUpperCase();
   if (["SELECT", "FROM", "WHERE", "JOIN", "ON", "AND"].includes(u))
     return "keyword";
   if (tok.includes(".")) {
     const [a, f] = tok.split(".");
-    const tn = aliases[a.toUpperCase()] || a;
-    const tk = schemaKey(tn);
+    const tk = schemaKey(a);
     if (tk)
       return SCHEMA[tk].fields.some((x) => x.toUpperCase() === f.toUpperCase())
         ? "attr"
@@ -80,7 +79,7 @@ function classifyTok(tok, aliases) {
 //  4. Cada predicado: operando esquerdo + operador + operando direito
 //  5. Ambos os operandos são validados contra o schema
 // ═══════════════════════════════════════════════════════
-function validateCondition(condRaw, aliases, usedTables, errors, ctx) {
+function validateCondition(condRaw, usedTables, errors, ctx) {
   if (!condRaw || !condRaw.trim()) return;
   const cond = condRaw.trim();
 
@@ -131,9 +130,7 @@ function validateCondition(condRaw, aliases, usedTables, errors, ctx) {
     return;
   }
 
-  parts.forEach((part) =>
-    validateAtom(part.trim(), aliases, usedTables, errors, ctx),
-  );
+  parts.forEach((part) => validateAtom(part.trim(), usedTables, errors, ctx));
 }
 
 /**
@@ -175,7 +172,7 @@ function splitByAnd(cond) {
   return parts;
 }
 
-function validateAtom(atom, aliases, usedTables, errors, ctx) {
+function validateAtom(atom, usedTables, errors, ctx) {
   if (!atom) {
     errors.push(`Condição vazia na cláusula ${ctx}.`);
     return;
@@ -194,7 +191,7 @@ function validateAtom(atom, aliases, usedTables, errors, ctx) {
   const innerParts = splitByAnd(expr);
   if (innerParts.length > 1) {
     innerParts.forEach((part) =>
-      validateAtom(part.trim(), aliases, usedTables, errors, ctx),
+      validateAtom(part.trim(), usedTables, errors, ctx),
     );
     return;
   }
@@ -264,7 +261,7 @@ function validateAtom(atom, aliases, usedTables, errors, ctx) {
       `Operador de comparação sem operando à esquerda na cláusula ${ctx}.`,
     );
   } else {
-    validateOperand(left, aliases, usedTables, errors, ctx);
+    validateOperand(left, usedTables, errors, ctx);
   }
 
   if (!right) {
@@ -272,7 +269,7 @@ function validateAtom(atom, aliases, usedTables, errors, ctx) {
       `Operador de comparação sem operando à direita na cláusula ${ctx}.`,
     );
   } else {
-    validateOperand(right, aliases, usedTables, errors, ctx);
+    validateOperand(right, usedTables, errors, ctx);
   }
 }
 
@@ -337,10 +334,10 @@ function findOperatorIndex(expr, op) {
  * - Tabela.campo → valida tabela declarada e campo no schema
  * - identificador isolado → valida nas tabelas declaradas
  *
- * Observação: aliases foram removidos do escopo do projeto. Portanto,
+ * Observação: apelidos de tabela foram removidos do escopo do projeto. Portanto,
  * o prefixo antes do ponto deve ser sempre o nome real da tabela.
  */
-function validateOperand(tok, aliases, usedTables, errors, ctx) {
+function validateOperand(tok, usedTables, errors, ctx) {
   if (isLiteral(tok)) return;
 
   if (tok.includes(".")) {
@@ -400,14 +397,15 @@ function validateOperand(tok, aliases, usedTables, errors, ctx) {
 //
 //  Cada JOIN é validado individualmente:
 //  - tabela presente e existente no schema
-//  - alias opcional válido e não duplicado
+//  - apelido de tabela não permitido
 //  - ON presente e com condição não vazia
 //  - condição ON validada com validateCondition()
 // ═══════════════════════════════════════════════════════
-function extractAndValidateJoins(sql, aliases, usedTables, errors) {
+function extractAndValidateJoins(sql, usedTables, errors) {
   const joins = [];
   const joinBlockRe = /\bJOIN\s+([\s\S]+?)(?=\s+\bJOIN\b|\s+\bWHERE\b|\s*$)/gi;
   let jm;
+  const availableTables = [...usedTables];
 
   while ((jm = joinBlockRe.exec(sql)) !== null) {
     const block = jm[1].trim();
@@ -425,7 +423,7 @@ function extractAndValidateJoins(sql, aliases, usedTables, errors) {
     }
 
     const rawTable = bm[1];
-    const aliasToken = bm[2];
+    const tableNickname = bm[2];
     const onCond = bm[3].trim();
     const canonicalTable = schemaKey(rawTable) || rawTable;
 
@@ -433,9 +431,9 @@ function extractAndValidateJoins(sql, aliases, usedTables, errors) {
       errors.push(`Tabela não encontrada no modelo: '${rawTable}'.`);
     }
 
-    if (aliasToken) {
+    if (tableNickname) {
       errors.push(
-        `Alias não é suportado neste trabalho: '${aliasToken}' após '${rawTable}'. Use o nome da tabela diretamente.`,
+        `Apelido de tabela não é suportado neste trabalho: '${tableNickname}' após '${rawTable}'. Use o nome da tabela diretamente.`,
       );
     }
 
@@ -446,12 +444,68 @@ function extractAndValidateJoins(sql, aliases, usedTables, errors) {
       continue;
     }
 
-    validateCondition(onCond, aliases, usedTables, errors, "ON");
+    validateCondition(onCond, usedTables, errors, "ON");
+    validateJoinConnectivity(onCond, canonicalTable, availableTables, errors);
     joins.push({
       table: canonicalTable,
-      alias: canonicalTable,
       condition: onCond,
     });
+
+    if (
+      !availableTables.some(
+        (t) =>
+          String(t.name).toUpperCase() === String(canonicalTable).toUpperCase(),
+      )
+    ) {
+      availableTables.push({ name: canonicalTable });
+    }
+  }
+
+  function validateJoinConnectivity(
+    onCond,
+    joinTable,
+    availableTables,
+    errors,
+  ) {
+    const referenced = referencedTablesInExpression(onCond);
+    const joinTableName = schemaKey(joinTable) || joinTable;
+
+    if (!referenced.length) {
+      errors.push(
+        `Cláusula ON do JOIN com '${joinTableName}' deve referenciar atributos qualificados das tabelas envolvidas. Exemplo: ${joinTableName}.campo = OutraTabela.campo.`,
+      );
+      return;
+    }
+
+    const referencesJoinTable = referenced.some(
+      (tableName) =>
+        String(tableName).toUpperCase() === String(joinTableName).toUpperCase(),
+    );
+
+    const referencesPreviousTable = referenced.some((tableName) =>
+      availableTables.some(
+        (t) => String(t.name).toUpperCase() === String(tableName).toUpperCase(),
+      ),
+    );
+
+    if (!referencesJoinTable || !referencesPreviousTable) {
+      errors.push(
+        `Cláusula ON do JOIN com '${joinTableName}' deve conectar '${joinTableName}' a uma tabela já declarada no FROM/JOIN.`,
+      );
+    }
+  }
+
+  function referencedTablesInExpression(expr) {
+    const refs = new Set();
+    const re = /\b([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\b/g;
+    let m;
+
+    while ((m = re.exec(expr)) !== null) {
+      const tableName = schemaKey(m[1]);
+      if (tableName) refs.add(tableName);
+    }
+
+    return Array.from(refs);
   }
 
   return joins;
@@ -464,7 +518,7 @@ function extractAndValidateJoins(sql, aliases, usedTables, errors) {
 //  1)  Pré-processamento (normalização)
 //  2)  Recursos fora do escopo → erro imediato
 //  3)  Estrutura mínima (SELECT ... FROM ...)
-//  4)  Extração de tabelas declaradas sem aliases
+//  4)  Extração de tabelas declaradas sem apelidos de tabela
 //  5)  Balanceamento global de parênteses
 //  6)  Validação dos atributos no SELECT (incl. duplicatas)
 //  7)  Validação dos blocos JOIN individualmente
@@ -479,7 +533,7 @@ function parse(rawSQL) {
 
   if (!sql) {
     errors.push("Consulta vazia.");
-    return { errors, tokens: [], aliases: {}, usedTables: [], parsed: null };
+    return { errors, tokens: [], usedTables: [], parsed: null };
   }
 
   // ── 2) Recursos fora do escopo → ERRO ────────────────
@@ -495,7 +549,7 @@ function parse(rawSQL) {
     { re: /\bIS\b/i, msg: "Operador 'IS' não é suportado neste trabalho." },
     {
       re: /\bAS\b/i,
-      msg: "Aliases com 'AS' não são suportados neste trabalho.",
+      msg: "Apelidos de tabela com 'AS' não são suportados neste trabalho.",
     },
     {
       re: /\bGROUP\s+BY\b/i,
@@ -550,7 +604,6 @@ function parse(rawSQL) {
     return {
       errors,
       tokens: tokenize(sql),
-      aliases: {},
       usedTables: [],
       parsed: null,
     };
@@ -562,7 +615,6 @@ function parse(rawSQL) {
     return {
       errors,
       tokens: tokenize(sql),
-      aliases: {},
       usedTables: [],
       parsed: null,
     };
@@ -573,7 +625,6 @@ function parse(rawSQL) {
     return {
       errors,
       tokens: tokenize(sql),
-      aliases: {},
       usedTables: [],
       parsed: null,
     };
@@ -596,28 +647,24 @@ function parse(rawSQL) {
   }
 
   // ── 4) Extração de tabelas declaradas ─────────────────
-  const aliases = {};
   const usedTables = [];
 
-  // Tabela base (FROM) — sem alias.
-  // Internamente, mantemos alias = nome da tabela apenas para preservar
-  // compatibilidade com as etapas HU2-HU5 já implementadas.
+  // Tabela base (FROM) — apelidos de tabela não são suportados.
   const fromM = sql.match(
     /\bFROM\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s+([A-Za-z_][A-Za-z0-9_]*))?(?=\s+JOIN\b|\s+WHERE\b|\s*$)/i,
   );
   if (fromM) {
     const rawName = fromM[1];
-    const aliasToken = fromM[2];
+    const tableNickname = fromM[2];
     const canonicalName = schemaKey(rawName) || rawName;
 
-    if (aliasToken) {
+    if (tableNickname) {
       errors.push(
-        `Alias não é suportado neste trabalho: '${aliasToken}' após '${rawName}'. Use o nome da tabela diretamente.`,
+        `Apelido de tabela não é suportado neste trabalho: '${tableNickname}' após '${rawName}'. Use o nome da tabela diretamente.`,
       );
     }
 
-    aliases[canonicalName.toUpperCase()] = canonicalName;
-    usedTables.push({ name: canonicalName, alias: canonicalName });
+    usedTables.push({ name: canonicalName });
 
     if (!schemaKey(rawName)) {
       errors.push(`Tabela não encontrada no modelo: '${rawName}'.`);
@@ -630,23 +677,22 @@ function parse(rawSQL) {
   let jam;
   while ((jam = joinTableRe.exec(sql)) !== null) {
     const rawName = jam[1];
-    const aliasToken = jam[2];
+    const tableNickname = jam[2];
     const canonicalName = schemaKey(rawName) || rawName;
 
-    if (aliasToken) {
+    if (tableNickname) {
       errors.push(
-        `Alias não é suportado neste trabalho: '${aliasToken}' após '${rawName}'. Use o nome da tabela diretamente.`,
+        `Apelido de tabela não é suportado neste trabalho: '${tableNickname}' após '${rawName}'. Use o nome da tabela diretamente.`,
       );
     }
 
-    aliases[canonicalName.toUpperCase()] = canonicalName;
     if (
       !usedTables.some(
         (t) =>
           String(t.name).toUpperCase() === String(canonicalName).toUpperCase(),
       )
     ) {
-      usedTables.push({ name: canonicalName, alias: canonicalName });
+      usedTables.push({ name: canonicalName });
     }
   }
 
@@ -679,11 +725,11 @@ function parse(rawSQL) {
     "SELECT e FROM",
     "WHERE sem condição",
     "ON sem condição",
-    "Alias não é suportado",
-    "Aliases com 'AS'",
+    "Apelido de tabela não é suportado",
+    "Apelidos de tabela com 'AS'",
   ];
   if (errors.some((e) => structKeywords.some((k) => e.includes(k)))) {
-    return { errors, tokens: rawToks, aliases, usedTables, parsed: null };
+    return { errors, tokens: rawToks, usedTables, parsed: null };
   }
 
   // ── 6) Valida atributos no SELECT ────────────────────
@@ -699,7 +745,7 @@ function parse(rawSQL) {
         .forEach((col) => {
           if (!col) return;
 
-          const key = canonicalSelectAttr(col, aliases, usedTables);
+          const key = canonicalSelectAttr(col, usedTables);
 
           if (seen.has(key)) {
             errors.push(`Atributo duplicado no SELECT: '${col}'.`);
@@ -759,21 +805,21 @@ function parse(rawSQL) {
   }
 
   // ── 7) Valida blocos JOIN individualmente ─────────────
-  extractAndValidateJoins(sql, aliases, usedTables, errors);
+  extractAndValidateJoins(sql, usedTables, errors);
 
   // ── 8) Valida condição WHERE ──────────────────────────
   // WHERE vem sempre após os JOINs; captura até o fim da string.
   const whereM = sql.match(/\bWHERE\s+([\s\S]+)$/i);
   if (whereM) {
-    validateCondition(whereM[1].trim(), aliases, usedTables, errors, "WHERE");
+    validateCondition(whereM[1].trim(), usedTables, errors, "WHERE");
   }
 
   const ok = errors.length === 0;
-  const parsed = ok ? extractParsed(sql, aliases, usedTables) : null;
-  return { errors, tokens: rawToks, aliases, usedTables, parsed };
+  const parsed = ok ? extractParsed(sql, usedTables) : null;
+  return { errors, tokens: rawToks, usedTables, parsed };
 }
 
-function canonicalSelectAttr(col, aliases, usedTables) {
+function canonicalSelectAttr(col, usedTables) {
   const raw = col.trim();
 
   if (!raw) return raw.toUpperCase();
@@ -807,19 +853,24 @@ function canonicalSelectAttr(col, aliases, usedTables) {
 }
 
 function hasInvalidSymbolicOperator(expr) {
-  // 1. Símbolos totalmente inválidos no escopo do trabalho
-  // (não fazem parte do SQL suportado)
-  if (/[#$¨^?`´]/.test(expr)) {
+  // Símbolos totalmente inválidos no escopo do trabalho
+  if (/[#$¨^?`´:\[\]{}\\]/.test(expr)) {
     return true;
   }
 
-  // 2. Símbolos que são inválidos quando usados com operadores
-  // Exemplos: %>, *=, %=, +>, /=, -=, &=, _= etc.
-  if (/[%*+\/&_|-](?:=|>|<)/.test(expr)) {
+  // Combinações inválidas com operadores de comparação
+  // Exemplos: %>, *=, %=, +>, /=, -=, &=, _=, !=
+  if (/[!%*+\/&_|-](?:=|>|<)/.test(expr)) {
     return true;
   }
 
-  if (/(?:=|>|<)[%*+\/&_|-]/.test(expr)) {
+  if (/(?:=|>|<)[!%*+\/&_|-]/.test(expr)) {
+    return true;
+  }
+
+  // Operadores aritméticos/modulares isolados fora do escopo
+  // Exemplo: Preco % 2 = 0
+  if (/(^|\s)[%*+\/&|](\s|$)/.test(expr)) {
     return true;
   }
 

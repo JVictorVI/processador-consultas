@@ -126,7 +126,7 @@ function renderOtimizacao(optResult, optimizedGraph) {
   h += `</div>`;
   return h;
 }
-function renderValidacao(errors, tokens, aliases, usedTables) {
+function renderValidacao(errors, tokens, usedTables) {
   const ok = errors.length === 0;
   const dot = document.getElementById("dot-v");
   dot.style.background = ok ? "var(--success)" : "var(--error)";
@@ -149,7 +149,7 @@ function renderValidacao(errors, tokens, aliases, usedTables) {
   if (tokens.length) {
     h += `<div class="section-label">Tokens Identificados</div><div class="tokens-wrap">`;
     tokens.forEach((t) => {
-      const c = classifyTok(t, aliases);
+      const c = classifyTok(t);
       const cls =
         c === "keyword"
           ? "token-keyword"
@@ -171,7 +171,7 @@ function renderValidacao(errors, tokens, aliases, usedTables) {
       const ex = !!schemaKey(t.name);
       h += `<span class="token ${ex ? "token-table" : "token-other"}"
         style="${ex ? "" : "color:var(--error);border-color:var(--error)"}">
-        ${esc(t.name)}${t.alias !== t.name ? ` <span style="opacity:.5">→ ${esc(t.alias)}</span>` : ""}
+        ${esc(t.name)}
       </span>`;
     });
     h += `</div>`;
@@ -188,10 +188,10 @@ let lastExprText = "";
 
 function processar() {
   const sql = document.getElementById("sql-input").value;
-  const { errors, tokens, aliases, usedTables, parsed } = parse(sql);
+  const { errors, tokens, usedTables, parsed } = parse(sql);
 
   // ── HU1: Validação ───────────────────────────────────
-  renderValidacao(errors, tokens, aliases, usedTables);
+  renderValidacao(errors, tokens, usedTables);
 
   // ── HU2: Álgebra Relacional ──────────────────────────
   const dotA = document.getElementById("dot-a");

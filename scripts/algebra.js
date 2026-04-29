@@ -8,14 +8,12 @@
 // ═══════════════════════════════════════════════════════
 //  EXTRATOR DE ESTRUTURA PARSED (para HU2)
 // ═══════════════════════════════════════════════════════
-function extractParsed(sql, aliases, usedTables) {
+function extractParsed(sql, usedTables) {
   const selM = sql.match(/\bSELECT\s+([\s\S]+?)\s+\bFROM\b/i);
   const selectCols = selM ? selM[1].trim() : '*';
 
   const frM = sql.match(/\bFROM\s+([A-Za-z_][A-Za-z0-9_]*)(?=\s+JOIN\b|\s+WHERE\b|\s*$)/i);
   const fromTable = frM ? (schemaKey(frM[1]) || frM[1]) : null;
-  const fromAlias = fromTable;
-
   const joins = [];
   const joinBlockRe = /\bJOIN\s+([\s\S]+?)(?=\s+\bJOIN\b|\s+\bWHERE\b|\s*$)/gi;
   let jm;
@@ -24,14 +22,14 @@ function extractParsed(sql, aliases, usedTables) {
     const bm = block.match(/^([A-Za-z_][A-Za-z0-9_]*)\s+ON\s+([\s\S]+)$/i);
     if (bm) {
       const table = schemaKey(bm[1]) || bm[1];
-      joins.push({ table, alias: table, condition: bm[2].trim() });
+      joins.push({ table, condition: bm[2].trim() });
     }
   }
 
   const whereM = sql.match(/\bWHERE\s+([\s\S]+)$/i);
   const whereCond = whereM ? whereM[1].trim() : null;
 
-  return { selectCols, fromTable, fromAlias, joins, whereCond, aliases, usedTables };
+  return { selectCols, fromTable, joins, whereCond, usedTables };
 }
 
 // ═══════════════════════════════════════════════════════
@@ -44,9 +42,9 @@ function joinKind(cond) {
   return m ? 'equi' : 'theta';
 }
 
-function makeRel(table, alias) {
+function makeRel(table) {
   const name = schemaKey(table) || table;
-  return { type: 'rel', name, alias: name };
+  return { type: 'rel', name };
 }
 
 // ═══════════════════════════════════════════════════════
@@ -54,10 +52,10 @@ function makeRel(table, alias) {
 // ═══════════════════════════════════════════════════════
 function toAlgebra(parsed) {
   if (!parsed || !parsed.fromTable) return null;
-  const { selectCols, fromTable, fromAlias, joins, whereCond } = parsed;
+  const { selectCols, fromTable, joins, whereCond } = parsed;
   const steps = [];
 
-  let tree = makeRel(fromTable, fromAlias);
+  let tree = makeRel(fromTable);
   steps.push({
     type: 'from', color: 'var(--accent)',
     label: `Relação base: ${relLabel(tree)}`,
@@ -66,7 +64,7 @@ function toAlgebra(parsed) {
   });
 
   joins.forEach((j, i) => {
-    const rel  = makeRel(j.table, j.alias);
+    const rel  = makeRel(j.table);
     const cond = j.condition.trim();
     const kind = joinKind(cond);
     tree = { type: kind, left: tree, right: rel, cond };
@@ -94,12 +92,12 @@ function toAlgebra(parsed) {
 
   let attrs;
   if (selectCols.trim() === '*') {
-    const tables = [{ table: fromTable, alias: fromAlias }, ...joins.map(j => ({ table: j.table, alias: j.alias }))];
+    const tables = [fromTable, ...joins.map(j => j.table)];
     const list = [];
-    tables.forEach(({ table, alias }) => {
+    tables.forEach((table) => {
       const tk = schemaKey(table);
       if (!tk) return;
-      SCHEMA[tk].fields.forEach(f => list.push(`${alias || table}.${f}`));
+      SCHEMA[tk].fields.forEach(f => list.push(`${table}.${f}`));
     });
     attrs = list.join(', ');
     tree = { type: 'pi', attrs, inner: tree, selectAll: true };
@@ -245,7 +243,7 @@ function splitWhereConditions(cond) {
   return String(cond).split(/\s+AND\s+/i).map(s => s.trim()).filter(Boolean);
 }
 
-function referencedAliases(expr) {
+function referencedTables(expr) {
   const refs = new Set();
   const re = /\b([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\b/g;
   let m;
@@ -258,9 +256,9 @@ function conditionBelongsToSingleRelation(cond, relations = []) {
 }
 
 function inferSingleRelationForCondition(cond, relations = []) {
-  const refs = referencedAliases(cond);
+  const refs = referencedTables(cond);
 
-  // Com aliases removidos, refs representa nomes reais de tabelas.
+  // Como apelidos de tabela foram removidos, refs representa nomes reais de tabelas.
   if (refs.length === 1) {
     return relations.find(r =>
       String(r.name).toUpperCase() === String(refs[0]).toUpperCase()
@@ -300,12 +298,8 @@ function collectRelations(node, list = []) {
   return list;
 }
 
-function aliasesInTree(node) {
-  return collectRelations(node).map(r => r.alias || r.name);
-}
-
-function subtreeHasAlias(node, alias) {
-  return aliasesInTree(node).some(a => String(a).toUpperCase() === String(alias).toUpperCase());
+function tableNamesInTree(node) {
+  return collectRelations(node).map(r => r.name);
 }
 
 function pushSelectionsToRelations(node, whereConds, steps) {
@@ -368,7 +362,7 @@ function collectJoinConditions(node, list = []) {
 function collectRequiredAttributes(tree, finalAttrs) {
   const required = {};
   const rels = collectRelations(tree);
-  rels.forEach(r => { required[r.alias || r.name] = new Set(); });
+  rels.forEach(r => { required[r.name] = new Set(); });
 
   function addQualified(expr) {
     const re = /\b([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\b/g;
@@ -383,7 +377,7 @@ function collectRequiredAttributes(tree, finalAttrs) {
   collectJoinConditions(tree).forEach(addQualified);
   collectSigmaConditions(tree).forEach(addQualified);
 
-  // SELECT sem alias: resolve apenas se o atributo existir em uma única relação.
+  // SELECT sem prefixo: resolve apenas se o atributo existir em uma única relação.
   String(finalAttrs || '')
     .split(',')
     .map(a => a.trim())
@@ -395,8 +389,8 @@ function collectRequiredAttributes(tree, finalAttrs) {
         return tk && SCHEMA[tk].fields.some(f => f.toUpperCase() === attr.toUpperCase());
       });
       if (matches.length === 1) {
-        const alias = matches[0].alias || matches[0].name;
-        required[alias].add(attr);
+        const tableName = matches[0].name;
+        required[tableName].add(attr);
       }
     });
 
@@ -420,10 +414,10 @@ function applyIntermediateProjections(node, finalAttrs, steps) {
 
     if (n.type === 'sigma' && n.inner && n.inner.type === 'rel') {
       const rel = n.inner;
-      const alias = rel.alias || rel.name;
-      const attrs = Array.from(required[alias] || []);
+      const tableName = rel.name;
+      const attrs = Array.from(required[tableName] || []);
       if (!attrs.length) return n;
-      const projected = { type: 'pi', attrs: attrs.map(a => `${alias}.${a}`).join(', '), inner: n };
+      const projected = { type: 'pi', attrs: attrs.map(a => `${tableName}.${a}`).join(', '), inner: n };
       steps.push({
         type: 'push-pi',
         label: `π intermediária em ${relLabel(rel)}`,
@@ -434,10 +428,10 @@ function applyIntermediateProjections(node, finalAttrs, steps) {
     }
 
     if (n.type === 'rel') {
-      const alias = n.alias || n.name;
-      const attrs = Array.from(required[alias] || []);
+      const tableName = n.name;
+      const attrs = Array.from(required[tableName] || []);
       if (!attrs.length) return n;
-      const projected = { type: 'pi', attrs: attrs.map(a => `${alias}.${a}`).join(', '), inner: n };
+      const projected = { type: 'pi', attrs: attrs.map(a => `${tableName}.${a}`).join(', '), inner: n };
       steps.push({
         type: 'push-pi',
         label: `π intermediária em ${relLabel(n)}`,
@@ -472,12 +466,12 @@ function reorderJoinTree(node, steps) {
     if (n.right) n.right = visit(n.right);
 
     if ((n.type === 'equi' || n.type === 'theta') && n.left && n.right) {
-      const leftAliases = aliasesInTree(n.left);
-      const rightAliases = aliasesInTree(n.right);
-      const condAliases = referencedAliases(n.cond);
-      const canSwap = condAliases.every(a =>
-        leftAliases.some(x => x.toUpperCase() === a.toUpperCase()) ||
-        rightAliases.some(x => x.toUpperCase() === a.toUpperCase())
+      const leftTables = tableNamesInTree(n.left);
+      const rightTables = tableNamesInTree(n.right);
+      const condTables = referencedTables(n.cond);
+      const canSwap = condTables.every(t =>
+        leftTables.some(x => x.toUpperCase() === t.toUpperCase()) ||
+        rightTables.some(x => x.toUpperCase() === t.toUpperCase())
       );
       if (canSwap && relationScore(n.right) > relationScore(n.left)) {
         const swapped = { ...n, left: n.right, right: n.left };
