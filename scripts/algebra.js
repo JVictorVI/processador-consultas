@@ -12,19 +12,19 @@ function extractParsed(sql, aliases, usedTables) {
   const selM = sql.match(/\bSELECT\s+([\s\S]+?)\s+\bFROM\b/i);
   const selectCols = selM ? selM[1].trim() : '*';
 
-  const frM = sql.match(/\bFROM\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:([A-Za-z_][A-Za-z0-9_]*)\s*)?(?:JOIN|WHERE|$)/i);
-  const fromTable = frM ? frM[1] : null;
-  const fromAlias = frM && frM[2] && !isReserved(frM[2]) ? frM[2] : fromTable;
+  const frM = sql.match(/\bFROM\s+([A-Za-z_][A-Za-z0-9_]*)(?=\s+JOIN\b|\s+WHERE\b|\s*$)/i);
+  const fromTable = frM ? (schemaKey(frM[1]) || frM[1]) : null;
+  const fromAlias = fromTable;
 
   const joins = [];
   const joinBlockRe = /\bJOIN\s+([\s\S]+?)(?=\s+\bJOIN\b|\s+\bWHERE\b|\s*$)/gi;
   let jm;
   while ((jm = joinBlockRe.exec(sql)) !== null) {
     const block = jm[1].trim();
-    const bm = block.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*(?:([A-Za-z_][A-Za-z0-9_]*)\s+)?ON\s+([\s\S]+)$/i);
+    const bm = block.match(/^([A-Za-z_][A-Za-z0-9_]*)\s+ON\s+([\s\S]+)$/i);
     if (bm) {
-      const rawAl = bm[2] && !isReserved(bm[2]) ? bm[2] : bm[1];
-      joins.push({ table: bm[1], alias: rawAl, condition: bm[3].trim() });
+      const table = schemaKey(bm[1]) || bm[1];
+      joins.push({ table, alias: table, condition: bm[2].trim() });
     }
   }
 
@@ -45,7 +45,8 @@ function joinKind(cond) {
 }
 
 function makeRel(table, alias) {
-  return { type: 'rel', name: schemaKey(table) || table, alias: alias || table };
+  const name = schemaKey(table) || table;
+  return { type: 'rel', name, alias: name };
 }
 
 // ═══════════════════════════════════════════════════════
@@ -105,7 +106,7 @@ function toAlgebra(parsed) {
     steps.push({
       type: 'pi', color: 'var(--pi)',
       label: `SELECT * → π (atributos qualificados por tabela)`,
-      desc:  `SELECT * com ${tables.length} tabela(s). Cada atributo é qualificado pelo alias/nome da tabela para evitar ambiguidade.`,
+      desc:  `SELECT * com ${tables.length} tabela(s). Cada atributo é qualificado pelo nome da tabela para evitar ambiguidade.`,
       tree:  deepCopy(tree)
     });
   } else {
@@ -164,9 +165,6 @@ function treeToHtml(n) {
 
 function relLabel(n) {
   if (!n) return '';
-  if (n.alias && n.alias.toUpperCase() !== String(n.name).toUpperCase()) {
-    return `${n.name} ${n.alias}`;
-  }
   return n.name;
 }
 
@@ -197,7 +195,7 @@ function optimizeTree(tree) {
 
   let optimizedInner = pushSelectionsToRelations(baseJoinTree, whereConds, optSteps);
 
-  const remainingConds = whereConds.filter(cond => !conditionBelongsToSingleRelation(cond));
+  const remainingConds = whereConds.filter(cond => !conditionBelongsToSingleRelation(cond, collectRelations(baseJoinTree)));
   if (remainingConds.length) {
     optimizedInner = { type: 'sigma', cond: remainingConds.join(' AND '), inner: optimizedInner };
     optSteps.push({
@@ -255,8 +253,42 @@ function referencedAliases(expr) {
   return Array.from(refs);
 }
 
-function conditionBelongsToSingleRelation(cond) {
-  return referencedAliases(cond).length === 1;
+function conditionBelongsToSingleRelation(cond, relations = []) {
+  return !!inferSingleRelationForCondition(cond, relations);
+}
+
+function inferSingleRelationForCondition(cond, relations = []) {
+  const refs = referencedAliases(cond);
+
+  // Com aliases removidos, refs representa nomes reais de tabelas.
+  if (refs.length === 1) {
+    return relations.find(r =>
+      String(r.name).toUpperCase() === String(refs[0]).toUpperCase()
+    ) || null;
+  }
+
+  if (refs.length > 1) return null;
+
+  // Condição sem prefixo: tentar inferir pela existência do atributo.
+  const identifiers = String(cond)
+    .replace(/'[^']*'/g, ' ')
+    .split(/[^A-Za-z0-9_]+/)
+    .map(x => x.trim())
+    .filter(Boolean)
+    .filter(x => !/^\d+(\.\d+)?$/.test(x))
+    .filter(x => !['AND'].includes(x.toUpperCase()));
+
+  if (!identifiers.length || !relations.length) return relations.length === 1 ? relations[0] : null;
+
+  const matches = relations.filter(r => {
+    const tk = schemaKey(r.name);
+    if (!tk) return false;
+    return identifiers.every(id =>
+      SCHEMA[tk].fields.some(f => f.toUpperCase() === id.toUpperCase())
+    );
+  });
+
+  return matches.length === 1 ? matches[0] : null;
 }
 
 function collectRelations(node, list = []) {
@@ -278,14 +310,20 @@ function subtreeHasAlias(node, alias) {
 
 function pushSelectionsToRelations(node, whereConds, steps) {
   if (!node) return node;
-  const relationConds = whereConds.filter(conditionBelongsToSingleRelation);
+
+  const relations = collectRelations(node);
+  const condTarget = new Map();
+
+  whereConds.forEach(cond => {
+    const target = inferSingleRelationForCondition(cond, relations);
+    if (target) condTarget.set(cond, target.name);
+  });
 
   function visit(n) {
     if (!n) return n;
     if (n.type === 'rel') {
-      const alias = n.alias || n.name;
-      const ownConds = relationConds.filter(cond =>
-        referencedAliases(cond).some(a => a.toUpperCase() === alias.toUpperCase())
+      const ownConds = whereConds.filter(cond =>
+        String(condTarget.get(cond) || '').toUpperCase() === String(n.name).toUpperCase()
       );
       if (!ownConds.length) return n;
       let wrapped = n;
@@ -307,7 +345,7 @@ function pushSelectionsToRelations(node, whereConds, steps) {
   }
 
   const result = visit(deepCopy(node));
-  if (!relationConds.length) {
+  if (!condTarget.size) {
     steps.push({
       type: 'push-sigma',
       label: 'Nenhuma seleção pôde ser empurrada para relação única',

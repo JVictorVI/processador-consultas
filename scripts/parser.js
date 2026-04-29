@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════
    PROCESSADOR DE CONSULTAS SQL — HU1
-   parser.js — Validação e parsing da consulta SQL
+   parser.js — Validação e parsing da consulta SQL sem suporte a aliases
    Depende de: schema.js
 ═══════════════════════════════════════════════════════ */
 "use strict";
@@ -47,7 +47,7 @@ function tokenize(sql) {
 
 function classifyTok(tok, aliases) {
   const u = tok.toUpperCase();
-  if (["SELECT", "FROM", "WHERE", "JOIN", "ON", "AND", "AS"].includes(u))
+  if (["SELECT", "FROM", "WHERE", "JOIN", "ON", "AND"].includes(u))
     return "keyword";
   if (tok.includes(".")) {
     const [a, f] = tok.split(".");
@@ -175,27 +175,35 @@ function splitByAnd(cond) {
   return parts;
 }
 
-/**
- * Valida um único predicado atômico: operando OP operando
- * Exemplos: "p.Preco > 50", "c.idCliente = p.Cliente_idCliente", "Nome = 'Ana'"
- */
 function validateAtom(atom, aliases, usedTables, errors, ctx) {
   if (!atom) {
     errors.push(`Condição vazia na cláusula ${ctx}.`);
     return;
   }
 
-  // Remove parênteses externos se a expressão inteira estiver envolvida
-  let expr = atom;
+  let expr = atom.trim();
+
+  // Remove parênteses externos quando eles envolvem a expressão inteira
   while (expr.startsWith("(") && expr.endsWith(")") && isWrapped(expr)) {
     expr = expr.slice(1, -1).trim();
   }
 
-  // AND em início ou fim dentro de um átomo
+  // Correção: se após remover parênteses ainda existir AND em nível superior,
+  // valida cada predicado interno separadamente.
+  // Exemplo: (Nome = 'Ana' AND CPF = '123')
+  const innerParts = splitByAnd(expr);
+  if (innerParts.length > 1) {
+    innerParts.forEach((part) =>
+      validateAtom(part.trim(), aliases, usedTables, errors, ctx),
+    );
+    return;
+  }
+
   if (/^\s*AND\b/i.test(expr)) {
     errors.push(`Conectivo AND em posição inválida na cláusula ${ctx}.`);
     return;
   }
+
   if (/\bAND\s*$/i.test(expr)) {
     errors.push(`Conectivo AND em posição inválida na cláusula ${ctx}.`);
     return;
@@ -206,7 +214,6 @@ function validateAtom(atom, aliases, usedTables, errors, ctx) {
     return;
   }
 
-  // ── Operadores de comparação inválidos ────────────
   const invalidOps = [
     {
       re: /!=/,
@@ -216,8 +223,12 @@ function validateAtom(atom, aliases, usedTables, errors, ctx) {
       re: /==/,
       msg: `Operador '==' não é suportado neste trabalho. Use '=' para igualdade.`,
     },
-    { re: /></, msg: `Operador '><' não é suportado neste trabalho.` },
+    {
+      re: /></,
+      msg: `Operador '><' não é suportado neste trabalho.`,
+    },
   ];
+
   for (const inv of invalidOps) {
     if (inv.re.test(expr)) {
       errors.push(inv.msg);
@@ -225,9 +236,9 @@ function validateAtom(atom, aliases, usedTables, errors, ctx) {
     }
   }
 
-  // ── Busca operador de comparação válido ───────────
   let opFound = null;
   let opIdx = -1;
+
   for (const op of CMP_OPS) {
     const idx = findOperatorIndex(expr, op);
     if (idx !== -1) {
@@ -248,17 +259,32 @@ function validateAtom(atom, aliases, usedTables, errors, ctx) {
   const left = expr.slice(0, opIdx).trim();
   const right = expr.slice(opIdx + opFound.length).trim();
 
-  if (!left)
+  if (!left) {
     errors.push(
       `Operador de comparação sem operando à esquerda na cláusula ${ctx}.`,
     );
-  else validateOperand(left, aliases, usedTables, errors, ctx);
+  } else {
+    validateOperand(left, aliases, usedTables, errors, ctx);
+  }
 
-  if (!right)
+  if (!right) {
     errors.push(
       `Operador de comparação sem operando à direita na cláusula ${ctx}.`,
     );
-  else validateOperand(right, aliases, usedTables, errors, ctx);
+  } else {
+    validateOperand(right, aliases, usedTables, errors, ctx);
+  }
+}
+
+function findTablesContainingAttribute(attr, usedTables) {
+  return usedTables
+    .map((t) => schemaKey(t.name))
+    .filter(Boolean)
+    .filter((tableName) =>
+      SCHEMA[tableName].fields.some(
+        (field) => field.toUpperCase() === attr.toUpperCase(),
+      ),
+    );
 }
 
 /**
@@ -308,42 +334,62 @@ function findOperatorIndex(expr, op) {
 /**
  * Valida um único operando de uma comparação:
  * - número ou string literal → sempre válido
- * - alias.campo → valida alias e campo no schema
+ * - Tabela.campo → valida tabela declarada e campo no schema
  * - identificador isolado → valida nas tabelas declaradas
+ *
+ * Observação: aliases foram removidos do escopo do projeto. Portanto,
+ * o prefixo antes do ponto deve ser sempre o nome real da tabela.
  */
 function validateOperand(tok, aliases, usedTables, errors, ctx) {
   if (isLiteral(tok)) return;
 
   if (tok.includes(".")) {
-    const [alias, field] = tok.split(".");
-    const tableName = aliases[alias.toUpperCase()];
+    const [tableRef, field] = tok.split(".");
+    const tableName = schemaKey(tableRef);
     if (!tableName) {
-      errors.push(`Alias não declarado: '${alias}' na cláusula ${ctx}.`);
+      errors.push(
+        `Tabela '${tableRef}' não existe no modelo (cláusula ${ctx}).`,
+      );
       return;
     }
-    const tk = schemaKey(tableName);
+
+    const declared = usedTables.some(
+      (t) => String(t.name).toUpperCase() === String(tableName).toUpperCase(),
+    );
+    if (!declared) {
+      errors.push(
+        `Tabela '${tableRef}' não foi declarada no FROM/JOIN (cláusula ${ctx}).`,
+      );
+      return;
+    }
+
     if (
-      tk &&
-      !SCHEMA[tk].fields.some((f) => f.toUpperCase() === field.toUpperCase())
+      !SCHEMA[tableName].fields.some(
+        (f) => f.toUpperCase() === field.toUpperCase(),
+      )
     ) {
       errors.push(
-        `Atributo '${field}' não existe na tabela '${tk}' (cláusula ${ctx}).`,
+        `Atributo '${field}' não existe na tabela '${tableName}' (cláusula ${ctx}).`,
       );
     }
     return;
   }
 
   if (isIdentifier(tok) && !isReserved(tok)) {
-    const found = usedTables.some((t) => {
-      const tk = schemaKey(t.name);
-      return (
-        tk &&
-        SCHEMA[tk].fields.some((f) => f.toUpperCase() === tok.toUpperCase())
-      );
-    });
-    if (!found) {
+    const matches = findTablesContainingAttribute(tok, usedTables);
+
+    if (matches.length === 0) {
       errors.push(
         `Atributo '${tok}' não encontrado nas tabelas declaradas (cláusula ${ctx}).`,
+      );
+      return;
+    }
+
+    if (matches.length > 1) {
+      errors.push(
+        `Atributo '${tok}' é ambíguo na cláusula ${ctx}. Use ${matches
+          .map((tableName) => `${tableName}.${tok}`)
+          .join(" ou ")}.`,
       );
     }
   }
@@ -366,7 +412,7 @@ function extractAndValidateJoins(sql, aliases, usedTables, errors) {
   while ((jm = joinBlockRe.exec(sql)) !== null) {
     const block = jm[1].trim();
     const blockRe =
-      /^([A-Za-z_][A-Za-z0-9_]*)\s*(?:([A-Za-z_][A-Za-z0-9_]*)\s+)?ON\s+([\s\S]+)$/i;
+      /^([A-Za-z_][A-Za-z0-9_]*)(?:\s+([A-Za-z_][A-Za-z0-9_]*))?\s+ON\s+([\s\S]+)$/i;
     const bm = block.match(blockRe);
 
     if (!bm) {
@@ -379,23 +425,18 @@ function extractAndValidateJoins(sql, aliases, usedTables, errors) {
     }
 
     const rawTable = bm[1];
-    const rawAlias = bm[2] && !isReserved(bm[2]) ? bm[2] : null;
+    const aliasToken = bm[2];
     const onCond = bm[3].trim();
-    const alias = rawAlias || rawTable;
+    const canonicalTable = schemaKey(rawTable) || rawTable;
 
     if (!schemaKey(rawTable)) {
       errors.push(`Tabela não encontrada no modelo: '${rawTable}'.`);
     }
 
-    if (bm[2]) {
-      if (isReserved(bm[2])) {
-        errors.push(`Alias inválido: '${bm[2]}' é uma palavra reservada.`);
-      } else if (
-        aliases[bm[2].toUpperCase()] &&
-        aliases[bm[2].toUpperCase()] !== rawTable
-      ) {
-        errors.push(`Alias '${bm[2]}' já está sendo usado por outra tabela.`);
-      }
+    if (aliasToken) {
+      errors.push(
+        `Alias não é suportado neste trabalho: '${aliasToken}' após '${rawTable}'. Use o nome da tabela diretamente.`,
+      );
     }
 
     if (!onCond) {
@@ -406,7 +447,11 @@ function extractAndValidateJoins(sql, aliases, usedTables, errors) {
     }
 
     validateCondition(onCond, aliases, usedTables, errors, "ON");
-    joins.push({ table: rawTable, alias, condition: onCond });
+    joins.push({
+      table: canonicalTable,
+      alias: canonicalTable,
+      condition: onCond,
+    });
   }
 
   return joins;
@@ -419,7 +464,7 @@ function extractAndValidateJoins(sql, aliases, usedTables, errors) {
 //  1)  Pré-processamento (normalização)
 //  2)  Recursos fora do escopo → erro imediato
 //  3)  Estrutura mínima (SELECT ... FROM ...)
-//  4)  Extração de tabelas e aliases com rigor
+//  4)  Extração de tabelas declaradas sem aliases
 //  5)  Balanceamento global de parênteses
 //  6)  Validação dos atributos no SELECT (incl. duplicatas)
 //  7)  Validação dos blocos JOIN individualmente
@@ -448,6 +493,10 @@ function parse(rawSQL) {
       msg: "Operador 'BETWEEN' não é suportado neste trabalho.",
     },
     { re: /\bIS\b/i, msg: "Operador 'IS' não é suportado neste trabalho." },
+    {
+      re: /\bAS\b/i,
+      msg: "Aliases com 'AS' não são suportados neste trabalho.",
+    },
     {
       re: /\bGROUP\s+BY\b/i,
       msg: "Cláusula 'GROUP BY' não é suportada neste trabalho.",
@@ -546,57 +595,58 @@ function parse(rawSQL) {
     errors.push("Cláusula ON sem condição de junção.");
   }
 
-  // ── 4) Extração de tabelas e aliases ─────────────────
+  // ── 4) Extração de tabelas declaradas ─────────────────
   const aliases = {};
   const usedTables = [];
 
-  // Tabela base (FROM)
+  // Tabela base (FROM) — sem alias.
+  // Internamente, mantemos alias = nome da tabela apenas para preservar
+  // compatibilidade com as etapas HU2-HU5 já implementadas.
   const fromM = sql.match(
-    /\bFROM\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:([A-Za-z_][A-Za-z0-9_]*)\s*)?(?:JOIN|WHERE|$)/i,
+    /\bFROM\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s+([A-Za-z_][A-Za-z0-9_]*))?(?=\s+JOIN\b|\s+WHERE\b|\s*$)/i,
   );
   if (fromM) {
     const rawName = fromM[1];
-    const rawAl = fromM[2] && !isReserved(fromM[2]) ? fromM[2] : null;
-    const alWord = fromM[2];
+    const aliasToken = fromM[2];
+    const canonicalName = schemaKey(rawName) || rawName;
 
-    if (alWord && isReserved(alWord)) {
-      errors.push(`Alias inválido: '${alWord}' é uma palavra reservada.`);
+    if (aliasToken) {
+      errors.push(
+        `Alias não é suportado neste trabalho: '${aliasToken}' após '${rawName}'. Use o nome da tabela diretamente.`,
+      );
     }
 
-    const alias = rawAl || rawName;
-    aliases[alias.toUpperCase()] = rawName;
-    aliases[rawName.toUpperCase()] = rawName;
-    usedTables.push({ name: rawName, alias });
+    aliases[canonicalName.toUpperCase()] = canonicalName;
+    usedTables.push({ name: canonicalName, alias: canonicalName });
 
     if (!schemaKey(rawName)) {
       errors.push(`Tabela não encontrada no modelo: '${rawName}'.`);
     }
   }
 
-  // Pré-extrai aliases de todos os JOINs (necessário para validar ON)
-  const joinAliasRe =
-    /\bJOIN\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:([A-Za-z_][A-Za-z0-9_]*)\s+)?ON\b/gi;
+  // Pré-extrai tabelas dos JOINs para permitir validação de condições ON.
+  const joinTableRe =
+    /\bJOIN\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s+([A-Za-z_][A-Za-z0-9_]*))?\s+ON\b/gi;
   let jam;
-  while ((jam = joinAliasRe.exec(sql)) !== null) {
+  while ((jam = joinTableRe.exec(sql)) !== null) {
     const rawName = jam[1];
-    const rawAl = jam[2] && !isReserved(jam[2]) ? jam[2] : null;
-    const alWord = jam[2];
+    const aliasToken = jam[2];
+    const canonicalName = schemaKey(rawName) || rawName;
 
-    if (alWord && isReserved(alWord)) {
-      errors.push(`Alias inválido: '${alWord}' é uma palavra reservada.`);
+    if (aliasToken) {
+      errors.push(
+        `Alias não é suportado neste trabalho: '${aliasToken}' após '${rawName}'. Use o nome da tabela diretamente.`,
+      );
     }
 
-    const alias = rawAl || rawName;
-
+    aliases[canonicalName.toUpperCase()] = canonicalName;
     if (
-      aliases[alias.toUpperCase()] &&
-      aliases[alias.toUpperCase()] !== rawName
+      !usedTables.some(
+        (t) =>
+          String(t.name).toUpperCase() === String(canonicalName).toUpperCase(),
+      )
     ) {
-      errors.push(`Alias '${alias}' está sendo usado mais de uma vez.`);
-    } else {
-      aliases[alias.toUpperCase()] = rawName;
-      aliases[rawName.toUpperCase()] = rawName;
-      usedTables.push({ name: rawName, alias });
+      usedTables.push({ name: canonicalName, alias: canonicalName });
     }
   }
 
@@ -629,6 +679,8 @@ function parse(rawSQL) {
     "SELECT e FROM",
     "WHERE sem condição",
     "ON sem condição",
+    "Alias não é suportado",
+    "Aliases com 'AS'",
   ];
   if (errors.some((e) => structKeywords.some((k) => e.includes(k)))) {
     return { errors, tokens: rawToks, aliases, usedTables, parsed: null };
@@ -663,15 +715,24 @@ function parse(rawSQL) {
         .forEach((col) => {
           if (!col) return;
           if (col.includes(".")) {
-            const [a, f] = col.split(".");
-            const tn = aliases[a.toUpperCase()];
-            if (!tn) {
-              errors.push(`Alias não declarado: '${a}' em '${col}'.`);
+            const [tableRef, f] = col.split(".");
+            const tk = schemaKey(tableRef);
+            if (!tk) {
+              errors.push(
+                `Tabela '${tableRef}' não existe no modelo em '${col}'.`,
+              );
               return;
             }
-            const tk = schemaKey(tn);
+            const declared = usedTables.some(
+              (t) => String(t.name).toUpperCase() === String(tk).toUpperCase(),
+            );
+            if (!declared) {
+              errors.push(
+                `Tabela '${tableRef}' não foi declarada no FROM/JOIN em '${col}'.`,
+              );
+              return;
+            }
             if (
-              tk &&
               !SCHEMA[tk].fields.some(
                 (x) => x.toUpperCase() === f.toUpperCase(),
               )
@@ -679,19 +740,19 @@ function parse(rawSQL) {
               errors.push(`Atributo '${f}' não existe na tabela '${tk}'.`);
             }
           } else if (/^[A-Za-z_]/.test(col)) {
-            const found = usedTables.some((t) => {
-              const tk = schemaKey(t.name);
-              return (
-                tk &&
-                SCHEMA[tk].fields.some(
-                  (f) => f.toUpperCase() === col.toUpperCase(),
-                )
-              );
-            });
-            if (!found)
+            const matches = findTablesContainingAttribute(col, usedTables);
+
+            if (matches.length === 0) {
               errors.push(
                 `Atributo '${col}' não encontrado nas tabelas declaradas.`,
               );
+            } else if (matches.length > 1) {
+              errors.push(
+                `Atributo '${col}' é ambíguo no SELECT. Use ${matches
+                  .map((tableName) => `${tableName}.${col}`)
+                  .join(" ou ")}.`,
+              );
+            }
           }
         });
     }
@@ -717,12 +778,11 @@ function canonicalSelectAttr(col, aliases, usedTables) {
 
   if (!raw) return raw.toUpperCase();
 
-  // atributo qualificado: alias.campo
+  // atributo qualificado: Tabela.campo
   if (raw.includes(".")) {
-    const [a, f] = raw.split(".");
-    const tableName = aliases[a.toUpperCase()];
-    if (!tableName) return raw.toUpperCase();
-    const tk = schemaKey(tableName) || tableName;
+    const [tableRef, f] = raw.split(".");
+    const tk = schemaKey(tableRef);
+    if (!tk) return raw.toUpperCase();
     return `${String(tk).toUpperCase()}.${String(f).toUpperCase()}`;
   }
 

@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════
-   PROCESSADOR DE CONSULTAS SQL — HU1 + HU2 + HU3
+   PROCESSADOR DE CONSULTAS SQL — HU1 + HU2 + HU3 + HU4 + HU5
    schema.js — Metadados do banco de dados, constantes e exemplos
 ═══════════════════════════════════════════════════════ */
 'use strict';
@@ -48,11 +48,11 @@ const EXAMPLES = [
   // 1 - WHERE
   `SELECT Nome, Email\nFROM Cliente\nWHERE TipoCliente_idTipoCliente = 1`,
   // 2 - JOIN + WHERE
-  `SELECT p.Nome, c.Descricao\nFROM Produto p\nJOIN Categoria c ON p.Categoria_idCategoria = c.idCategoria\nWHERE p.Preco > 50`,
+  `SELECT Produto.Nome, Categoria.Descricao\nFROM Produto\nJOIN Categoria ON Produto.Categoria_idCategoria = Categoria.idCategoria\nWHERE Produto.Preco > 50`,
   // 3 - Multi-JOIN
-  `SELECT cl.Nome, pe.DataPedido, pr.Nome, php.Quantidade\nFROM Cliente cl\nJOIN Pedido pe ON pe.Cliente_idCliente = cl.idCliente\nJOIN Pedido_has_Produto php ON php.Pedido_idPedido = pe.idPedido\nJOIN Produto pr ON pr.idProduto = php.Produto_idProduto`,
+  `SELECT Cliente.Nome, Pedido.DataPedido, Produto.Nome, Pedido_has_Produto.Quantidade\nFROM Cliente\nJOIN Pedido ON Pedido.Cliente_idCliente = Cliente.idCliente\nJOIN Pedido_has_Produto ON Pedido_has_Produto.Pedido_idPedido = Pedido.idPedido\nJOIN Produto ON Produto.idProduto = Pedido_has_Produto.Produto_idProduto`,
   // 4 - WHERE composto com AND
-  `SELECT cl.Nome, pe.ValorTotalPedido\nFROM Cliente cl\nJOIN Pedido pe ON pe.Cliente_idCliente = cl.idCliente\nWHERE pe.ValorTotalPedido > 200 AND cl.TipoCliente_idTipoCliente = 2`,
+  `SELECT Cliente.Nome, Pedido.ValorTotalPedido\nFROM Cliente\nJOIN Pedido ON Pedido.Cliente_idCliente = Cliente.idCliente\nWHERE Pedido.ValorTotalPedido > 200 AND Cliente.TipoCliente_idTipoCliente = 2`,
   // 5 - SELECT *
   `SELECT *\nFROM Produto`,
   // 6 - Erro: tabela inexistente
