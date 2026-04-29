@@ -1428,3 +1428,23 @@ body[data-tab="otimizacao"] .container {
 body[data-tab="otimizacao"] #otimizacao-panel {
   min-height: 190px;
 }
+
+
+/* Badge HU5 */
+.badge.hu5 {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.35);
+  color: var(--warn);
+}
+
+body[data-tab="plano"] .main-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+body[data-tab="plano"] .main-grid > .col:nth-child(2) {
+  display: none;
+}
+
+body[data-tab="plano"] .container {
+  max-width: 1200px;
+}

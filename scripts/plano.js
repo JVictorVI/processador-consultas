@@ -4,6 +4,15 @@
 ═══════════════════════════════════════════════════════ */
 'use strict';
 
+function formatRelForPlan(node) {
+  if (!node) return '';
+  if (typeof relLabel === 'function') return relLabel(node);
+  if (node.alias && String(node.alias).toUpperCase() !== String(node.name).toUpperCase()) {
+    return `${node.name} ${node.alias}`;
+  }
+  return node.name || '';
+}
+
 /**
  * Gera o plano de execução percorrendo a árvore em pós-ordem (bottom-up).
  */
@@ -23,7 +32,7 @@ function astToExecutionPlan(node, plan = []) {
 
   switch (node.type) {
     case 'rel':
-      step.description = `Aceder à relação (tabela): <span style="${sqlStyle}">${node.name}</span>`;
+      step.description = `Acessar relação (tabela): <span style="${sqlStyle}">${formatRelForPlan(node)}</span>`;
       break;
     case 'sigma':
       step.description = `Aplicar filtro de Seleção (σ): reter tuplas onde <span style="${sqlStyle}">${node.cond}</span>`;

@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════
-   PROCESSADOR DE CONSULTAS SQL — HU1 + HU2 + HU3
+   PROCESSADOR DE CONSULTAS SQL — HU1 + HU2 + HU3 + HU4 + HU5
    app.js — Interface, renderização e ponto de entrada
-   Depende de: schema.js, parser.js, algebra.js, grafo.js
+   Depende de: schema.js, parser.js, algebra.js, grafo.js, plano.js
 ═══════════════════════════════════════════════════════ */
 "use strict";
 
@@ -206,6 +206,10 @@ function processar() {
   const dotO = document.getElementById("dot-o");
   const otimizacaoPanel = document.getElementById("otimizacao-panel");
 
+  // ── HU5: Plano de Execução ────────────────────────────
+  const dotE = document.getElementById("dot-e");
+  const planoPanel = document.getElementById("plano-panel");
+
   const ERR_MSG_HU2 = `<div style="padding:14px">
     <div class="status-banner err">
       <span>✕</span>
@@ -227,6 +231,13 @@ function processar() {
     </div>
   </div>`;
 
+  const ERR_MSG_HU5 = `<div style="padding:14px">
+    <div class="status-banner err">
+      <span>✕</span>
+      <span>Corrija os erros de validação (HU1) antes de gerar o plano de execução.</span>
+    </div>
+  </div>`;
+
   if (errors.length > 0) {
     // HU2 — erro
     dotA.style.background = "var(--error)";
@@ -243,6 +254,11 @@ function processar() {
     dotO.style.background = "var(--error)";
     dotO.style.boxShadow = "0 0 8px var(--error)";
     otimizacaoPanel.innerHTML = ERR_MSG_HU4;
+
+    // HU5 — erro
+    dotE.style.background = "var(--error)";
+    dotE.style.boxShadow = "0 0 8px var(--error)";
+    planoPanel.innerHTML = ERR_MSG_HU5;
   } else {
     const result = toAlgebra(parsed);
     if (result) {
@@ -268,14 +284,10 @@ function processar() {
 
       initGraphPanAndCenter();
 
-      // HU5 — sucesso: gera e renderiza o plano de execução
-      const dotE = document.getElementById("dot-e");
-      const planoPanel = document.getElementById("plano-panel");
-      if (dotE && planoPanel) {
-        dotE.style.background = "var(--success)";
-        dotE.style.boxShadow = "0 0 8px var(--success)";
-        planoPanel.innerHTML = renderPlanoExecucao(result.tree);
-      }
+      // HU5 — sucesso: gera o plano a partir da árvore otimizada
+      dotE.style.background = "var(--success)";
+      dotE.style.boxShadow = "0 0 8px var(--success)";
+      planoPanel.innerHTML = renderPlanoExecucao(optResult.optimizedTree);
     }
   }
 }
@@ -423,14 +435,11 @@ function limpar() {
     `<div class="tree-empty"><div class="empty-icon pulse" style="font-size:2rem">🌳</div><p>Grafo gerado após processar uma consulta válida</p></div>`;
   document.getElementById("otimizacao-panel").innerHTML =
     `<div class="otimizacao-empty"><div class="empty-icon pulse" style="font-size:2rem">⚡</div><p>Árvore otimizada após processar uma consulta válida</p></div>`;
-  ["dot-v", "dot-a", "dot-p", "dot-o"].forEach((id) => {});
-
-  // ── ADICIONADO PARA A HU5 ──
+  // ── HU5 ──
   document.getElementById("plano-panel").innerHTML =
     `<div class="tree-empty"><div class="empty-icon pulse" style="font-size: 2rem">📋</div><p>Plano de execução gerado após processar uma consulta.</p></div>`;
 
-  // O "dot-e" foi incluído na lista para resetar a cor da aba HU5
-  ["dot-v", "dot-a", "dot-p", "dot-e"].forEach((id) => {
+  ["dot-v", "dot-a", "dot-p", "dot-o", "dot-e"].forEach((id) => {
     document.getElementById(id).style.background = "var(--muted)";
     document.getElementById(id).style.boxShadow = "none";
   });
