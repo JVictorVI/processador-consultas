@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════
-   PROCESSADOR DE CONSULTAS SQL — HU2
-   algebra.js — Conversão para Álgebra Relacional
+   PROCESSADOR DE CONSULTAS SQL — HU2 + HU4
+   algebra.js — Conversão para Álgebra Relacional e Otimização
    Depende de: schema.js, parser.js
 ═══════════════════════════════════════════════════════ */
 'use strict';
@@ -9,16 +9,13 @@
 //  EXTRATOR DE ESTRUTURA PARSED (para HU2)
 // ═══════════════════════════════════════════════════════
 function extractParsed(sql, aliases, usedTables) {
-  // SELECT colunas
   const selM = sql.match(/\bSELECT\s+([\s\S]+?)\s+\bFROM\b/i);
   const selectCols = selM ? selM[1].trim() : '*';
 
-  // FROM tabela base
   const frM = sql.match(/\bFROM\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:([A-Za-z_][A-Za-z0-9_]*)\s*)?(?:JOIN|WHERE|$)/i);
   const fromTable = frM ? frM[1] : null;
   const fromAlias = frM && frM[2] && !isReserved(frM[2]) ? frM[2] : fromTable;
 
-  // JOINs — usa a mesma regex robusta
   const joins = [];
   const joinBlockRe = /\bJOIN\s+([\s\S]+?)(?=\s+\bJOIN\b|\s+\bWHERE\b|\s*$)/gi;
   let jm;
@@ -31,17 +28,14 @@ function extractParsed(sql, aliases, usedTables) {
     }
   }
 
-  // WHERE — captura tudo após WHERE até o fim da consulta
   const whereM = sql.match(/\bWHERE\s+([\s\S]+)$/i);
   const whereCond = whereM ? whereM[1].trim() : null;
 
-  return { selectCols, fromTable, fromAlias, joins, whereCond, aliases };
+  return { selectCols, fromTable, fromAlias, joins, whereCond, aliases, usedTables };
 }
 
 // ═══════════════════════════════════════════════════════
 //  DETECTA TIPO DE JUNÇÃO
-//  equi  → X.A = Y.B  (igualdade entre atributos de tabelas distintas)
-//  theta → qualquer outra condição
 // ═══════════════════════════════════════════════════════
 function joinKind(cond) {
   const m = cond.trim().match(
@@ -50,44 +44,36 @@ function joinKind(cond) {
   return m ? 'equi' : 'theta';
 }
 
+function makeRel(table, alias) {
+  return { type: 'rel', name: schemaKey(table) || table, alias: alias || table };
+}
+
 // ═══════════════════════════════════════════════════════
 //  CONVERSOR PARA ÁLGEBRA RELACIONAL (HU2)
-//
-//  Ordem lógica correta:
-//  1. Relação base (FROM)
-//  2. Junções binárias aninhadas (JOIN)
-//  3. Seleção (WHERE → σ)
-//  4. Projeção (SELECT → π)
-//     SELECT * → π com atributos qualificados por alias/tabela
-//     (HU3 exige raiz sempre como projeção)
-//
-//  NÃO contém otimização (HU4) nem plano físico (HU5)
 // ═══════════════════════════════════════════════════════
 function toAlgebra(parsed) {
   if (!parsed || !parsed.fromTable) return null;
   const { selectCols, fromTable, fromAlias, joins, whereCond } = parsed;
   const steps = [];
 
-  // Passo 1 — relação base
-  let tree = { type: 'rel', name: schemaKey(fromTable) || fromTable };
+  let tree = makeRel(fromTable, fromAlias);
   steps.push({
     type: 'from', color: 'var(--accent)',
-    label: `Relação base: ${tree.name}`,
-    desc:  `Ponto de partida — relação ${tree.name}. Cada linha representa uma tupla.`,
+    label: `Relação base: ${relLabel(tree)}`,
+    desc:  `Ponto de partida — relação ${relLabel(tree)}. Cada linha representa uma tupla.`,
     tree:  deepCopy(tree)
   });
 
-  // Passo 2 — JOINs: junções binárias aninhadas
   joins.forEach((j, i) => {
-    const tbl  = schemaKey(j.table) || j.table;
+    const rel  = makeRel(j.table, j.alias);
     const cond = j.condition.trim();
     const kind = joinKind(cond);
-    tree = { type: kind, left: tree, right: { type: 'rel', name: tbl }, cond };
+    tree = { type: kind, left: tree, right: rel, cond };
     steps.push({
       type: 'join', color: 'var(--join)',
       label: kind === 'equi'
-        ? `JOIN #${i+1} → Equijunção ⋈ com ${tbl}`
-        : `JOIN #${i+1} → Junção-θ ⋈θ com ${tbl}`,
+        ? `JOIN #${i+1} → Equijunção ⋈ com ${relLabel(rel)}`
+        : `JOIN #${i+1} → Junção-θ ⋈θ com ${relLabel(rel)}`,
       desc: kind === 'equi'
         ? `Equijunção: igualdade entre FK e PK. Notação: ⋈_{${cond}}.`
         : `Junção theta: condição geral (${cond}). Retém tuplas que satisfazem o predicado.`,
@@ -95,7 +81,6 @@ function toAlgebra(parsed) {
     });
   });
 
-  // Passo 3 — σ: seleção (WHERE)
   if (whereCond) {
     tree = { type: 'sigma', cond: whereCond, inner: tree };
     steps.push({
@@ -106,24 +91,17 @@ function toAlgebra(parsed) {
     });
   }
 
-  // Passo 4 — π: projeção (SELECT)
-  // SELECT * → π com atributos qualificados por alias (ou tabela),
-  //            evitando ambiguidade em JOINs com campos de mesmo nome.
   let attrs;
   if (selectCols.trim() === '*') {
-    const tables = [fromTable, ...joins.map(j => j.table)];
-    const list   = [];
-    tables.forEach(t => {
-      const tk = schemaKey(t);
+    const tables = [{ table: fromTable, alias: fromAlias }, ...joins.map(j => ({ table: j.table, alias: j.alias }))];
+    const list = [];
+    tables.forEach(({ table, alias }) => {
+      const tk = schemaKey(table);
       if (!tk) return;
-      // Inverte o mapa aliases (alias→tabela) para encontrar o alias desta tabela
-      const alias = Object.keys(parsed.aliases).find(
-        a => parsed.aliases[a] === t && a !== t.toUpperCase()
-      ) || t;
-      SCHEMA[tk].fields.forEach(f => list.push(`${alias}.${f}`));
+      SCHEMA[tk].fields.forEach(f => list.push(`${alias || table}.${f}`));
     });
     attrs = list.join(', ');
-    tree = { type: 'pi', attrs, inner: tree };
+    tree = { type: 'pi', attrs, inner: tree, selectAll: true };
     steps.push({
       type: 'pi', color: 'var(--pi)',
       label: `SELECT * → π (atributos qualificados por tabela)`,
@@ -145,12 +123,12 @@ function toAlgebra(parsed) {
 }
 
 // ─────────────────────────────────────────────────────
-//  AST → texto plano (para copiar)
+//  AST → texto plano / HTML
 // ─────────────────────────────────────────────────────
 function treeToText(n) {
   if (!n) return '';
   switch (n.type) {
-    case 'rel':   return n.name;
+    case 'rel':   return relLabel(n);
     case 'equi':  return `(${treeToText(n.left)} ⋈_{${n.cond}} ${treeToText(n.right)})`;
     case 'theta': return `(${treeToText(n.left)} ⋈_θ{${n.cond}} ${treeToText(n.right)})`;
     case 'sigma': return `σ_{${n.cond}}(${treeToText(n.inner)})`;
@@ -159,201 +137,328 @@ function treeToText(n) {
   }
 }
 
-// ─────────────────────────────────────────────────────
-//  AST → HTML colorido
-//  Cada operador "puxa" seu conteúdo pela cor:
-//    π  → símbolo + atributos em verde      (.s-pi   / .s-proj)
-//    σ  → símbolo + condição em rosa        (.s-sigma / .s-sigma-cond)
-//    ⋈  → símbolo + condição em azul        (.s-join  / .s-join-cond)
-//    rel → nome da tabela em ciano          (.s-rel)
-//    ()  → parênteses em cinza discreto     (.s-paren)
-// ─────────────────────────────────────────────────────
 function treeToHtml(n) {
   if (!n) return '';
   const e = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   switch (n.type) {
     case 'rel':
-      return `<span class="s-rel">${e(n.name)}</span>`;
-
+      return `<span class="s-rel">${e(relLabel(n))}</span>`;
     case 'equi':
-      return `<span class="s-paren">( </span>` +
-             treeToHtml(n.left) +
+      return `<span class="s-paren">( </span>` + treeToHtml(n.left) +
              ` <span class="s-join">⋈</span><span class="s-sub s-join-cond">${e(n.cond)}</span> ` +
-             treeToHtml(n.right) +
-             `<span class="s-paren"> )</span>`;
-
+             treeToHtml(n.right) + `<span class="s-paren"> )</span>`;
     case 'theta':
-      return `<span class="s-paren">( </span>` +
-             treeToHtml(n.left) +
+      return `<span class="s-paren">( </span>` + treeToHtml(n.left) +
              ` <span class="s-join">⋈</span><span class="s-sub s-join-cond">θ: ${e(n.cond)}</span> ` +
-             treeToHtml(n.right) +
-             `<span class="s-paren"> )</span>`;
-
+             treeToHtml(n.right) + `<span class="s-paren"> )</span>`;
     case 'sigma':
-      return `<span class="s-sigma">σ</span>` +
-             `<span class="s-sub s-sigma-cond">${e(n.cond)}</span>` +
-             `<span class="s-paren">( </span>` +
-             treeToHtml(n.inner) +
-             `<span class="s-paren"> )</span>`;
-
+      return `<span class="s-sigma">σ</span><span class="s-sub s-sigma-cond">${e(n.cond)}</span>` +
+             `<span class="s-paren">( </span>` + treeToHtml(n.inner) + `<span class="s-paren"> )</span>`;
     case 'pi':
-      return `<span class="s-pi">π</span>` +
-             `<span class="s-sub s-proj">${e(n.attrs)}</span>` +
-             `<span class="s-paren">( </span>` +
-             treeToHtml(n.inner) +
-             `<span class="s-paren"> )</span>`;
-
+      return `<span class="s-pi">π</span><span class="s-sub s-proj">${e(n.attrs)}</span>` +
+             `<span class="s-paren">( </span>` + treeToHtml(n.inner) + `<span class="s-paren"> )</span>`;
     default:
       return '';
   }
 }
 
+function relLabel(n) {
+  if (!n) return '';
+  if (n.alias && n.alias.toUpperCase() !== String(n.name).toUpperCase()) {
+    return `${n.name} ${n.alias}`;
+  }
+  return n.name;
+}
+
 function deepCopy(o) { return JSON.parse(JSON.stringify(o)); }
 
 // ═══════════════════════════════════════════════════════
-//  HU4 — OTIMIZAÇÃO DA ÁRVORE DE CONSULTA
-//
-//  Aplica heurísticas para reordenar a árvore visando eficiência:
-//  - Push down seleções (σ) o mais cedo possível para reduzir tuplas.
-//  - Push down projeções (π) após seleções para reduzir atributos.
-//  - Reordenar junções para aplicar as mais restritivas primeiro.
-//  - Evitar produto cartesiano (não há no trabalho, pois sempre JOIN com ON).
-//
-//  Entrada: árvore não otimizada da HU2.
-//  Saída: árvore otimizada + passos de otimização.
+//  HU4 — OTIMIZAÇÃO REAL DA ÁRVORE DE CONSULTA
 // ═══════════════════════════════════════════════════════
 function optimizeTree(tree) {
   if (!tree) return { optimizedTree: null, optSteps: [] };
 
   const optSteps = [];
-  let currentTree = deepCopy(tree);
+  const originalTree = deepCopy(tree);
+  const finalPi = tree.type === 'pi' ? deepCopy(tree) : null;
+  const finalAttrs = finalPi ? finalPi.attrs : '*';
 
-  // Passo 1: Push down seleções (σ) para reduzir tuplas o mais cedo possível
-  currentTree = pushDownSigma(currentTree, optSteps);
+  const withoutProjection = finalPi ? deepCopy(finalPi.inner) : deepCopy(tree);
+  const extracted = extractTopSigma(withoutProjection);
+  const baseJoinTree = extracted.inner;
+  const whereConds = extracted.conds;
 
-  // Passo 2: Push down projeções (π) após seleções para reduzir atributos
-  currentTree = pushDownPi(currentTree, optSteps);
+  optSteps.push({
+    type: 'original',
+    label: 'Árvore original',
+    desc: 'Forma inicial gerada pela conversão SQL → álgebra relacional, antes das heurísticas.',
+    tree: deepCopy(originalTree)
+  });
 
-  // Passo 3: Reordenar junções baseado em seletividade (simplificado: por ordem de condição)
-  currentTree = reorderJoins(currentTree, optSteps);
+  let optimizedInner = pushSelectionsToRelations(baseJoinTree, whereConds, optSteps);
 
-  return { optimizedTree: currentTree, optSteps };
-}
-
-// ─────────────────────────────────────────────────────
-//  PUSH DOWN SIGMA: empurra seleções para baixo na árvore
-// ─────────────────────────────────────────────────────
-function pushDownSigma(node, steps) {
-  if (!node) return node;
-
-  // Se é σ, tenta empurrar para os filhos
-  if (node.type === 'sigma') {
-    const inner = pushDownSigma(node.inner, steps);
-    if (inner.type === 'equi' || inner.type === 'theta') {
-      // Empurrar σ através de JOIN: σ_cond(R ⋈ S) → σ_cond(R) ⋈ σ_cond(S) se cond se aplica a ambas
-      // Simplificado: assume que cond se aplica à junção inteira
-      steps.push({
-        type: 'push-sigma',
-        label: `Push down σ: ${node.cond}`,
-        desc: `Empurrando seleção para reduzir tuplas antes da junção.`,
-        tree: deepCopy({ type: 'sigma', cond: node.cond, inner })
-      });
-      return { type: 'sigma', cond: node.cond, inner };
-    } else if (inner.type === 'rel') {
-      // Já no nível da relação
-      return node;
-    } else {
-      return { type: 'sigma', cond: node.cond, inner };
-    }
-  }
-
-  // Para outros nós, recursão
-  if (node.inner) {
-    node.inner = pushDownSigma(node.inner, steps);
-  }
-  if (node.left) {
-    node.left = pushDownSigma(node.left, steps);
-  }
-  if (node.right) {
-    node.right = pushDownSigma(node.right, steps);
-  }
-
-  return node;
-}
-
-// ─────────────────────────────────────────────────────
-//  PUSH DOWN PI: empurra projeções após seleções
-// ─────────────────────────────────────────────────────
-function pushDownPi(node, steps) {
-  if (!node) return node;
-
-  // Se é π, tenta empurrar para baixo
-  if (node.type === 'pi') {
-    const inner = pushDownPi(node.inner, steps);
-    if (inner.type === 'sigma') {
-      // π após σ: mantém π no topo, mas registra
-      steps.push({
-        type: 'push-pi',
-        label: `Push down π: ${node.attrs}`,
-        desc: `Projeção aplicada após seleção para reduzir atributos.`,
-        tree: deepCopy({ type: 'pi', attrs: node.attrs, inner })
-      });
-      return { type: 'pi', attrs: node.attrs, inner };
-    } else if (inner.type === 'equi' || inner.type === 'theta') {
-      // Para JOIN, π pode ser aplicada parcialmente
-      steps.push({
-        type: 'push-pi',
-        label: `Push down π através de JOIN: ${node.attrs}`,
-        desc: `Projeção aplicada nas relações da junção.`,
-        tree: deepCopy({ type: 'pi', attrs: node.attrs, inner })
-      });
-      return { type: 'pi', attrs: node.attrs, inner };
-    } else {
-      return { type: 'pi', attrs: node.attrs, inner };
-    }
-  }
-
-  // Recursão
-  if (node.inner) {
-    node.inner = pushDownPi(node.inner, steps);
-  }
-  if (node.left) {
-    node.left = pushDownPi(node.left, steps);
-  }
-  if (node.right) {
-    node.right = pushDownPi(node.right, steps);
-  }
-
-  return node;
-}
-
-// ─────────────────────────────────────────────────────
-//  REORDER JOINS: reordena junções para aplicar as mais restritivas primeiro
-// ─────────────────────────────────────────────────────
-function reorderJoins(node, steps) {
-  if (!node) return node;
-
-  // Se é JOIN, verifica se pode reordenar
-  if (node.type === 'equi' || node.type === 'theta') {
-    // Simplificado: assume ordem atual é boa, mas registra
-    steps.push({
-      type: 'reorder-join',
-      label: `Reordenar JOIN: ${node.cond}`,
-      desc: `Aplicando junção mais restritiva primeiro.`,
-      tree: deepCopy(node)
+  const remainingConds = whereConds.filter(cond => !conditionBelongsToSingleRelation(cond));
+  if (remainingConds.length) {
+    optimizedInner = { type: 'sigma', cond: remainingConds.join(' AND '), inner: optimizedInner };
+    optSteps.push({
+      type: 'push-sigma',
+      label: 'Seleções compostas preservadas acima da junção',
+      desc: 'Condições que dependem de mais de uma relação permanecem acima da junção para preservar equivalência.',
+      tree: deepCopy(optimizedInner)
     });
   }
 
-  // Recursão
-  if (node.inner) {
-    node.inner = reorderJoins(node.inner, steps);
+  optimizedInner = reorderJoinTree(optimizedInner, optSteps);
+  optimizedInner = applyIntermediateProjections(optimizedInner, finalAttrs, optSteps);
+
+  const optimizedTree = {
+    type: 'pi',
+    attrs: finalAttrs,
+    inner: optimizedInner,
+    selectAll: finalPi ? finalPi.selectAll : false
+  };
+
+  optSteps.push({
+    type: 'final',
+    label: 'Árvore otimizada final',
+    desc: 'Plano lógico final com seleções próximas das relações, projeções intermediárias e junções preservando suas dependências.',
+    tree: deepCopy(optimizedTree)
+  });
+
+  return { optimizedTree, optSteps };
+}
+
+// ─────────────────────────────────────────────────────
+//  Extração de σ no topo: π(σc(J)) → c + J
+// ─────────────────────────────────────────────────────
+function extractTopSigma(node) {
+  const conds = [];
+  let current = deepCopy(node);
+  while (current && current.type === 'sigma') {
+    conds.push(...splitWhereConditions(current.cond));
+    current = current.inner;
   }
-  if (node.left) {
-    node.left = reorderJoins(node.left, steps);
-  }
-  if (node.right) {
-    node.right = reorderJoins(node.right, steps);
+  return { inner: current, conds };
+}
+
+function splitWhereConditions(cond) {
+  if (!cond) return [];
+  if (typeof splitByAnd === 'function') return splitByAnd(cond).map(s => s.trim()).filter(Boolean);
+  return String(cond).split(/\s+AND\s+/i).map(s => s.trim()).filter(Boolean);
+}
+
+function referencedAliases(expr) {
+  const refs = new Set();
+  const re = /\b([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\b/g;
+  let m;
+  while ((m = re.exec(expr)) !== null) refs.add(m[1]);
+  return Array.from(refs);
+}
+
+function conditionBelongsToSingleRelation(cond) {
+  return referencedAliases(cond).length === 1;
+}
+
+function collectRelations(node, list = []) {
+  if (!node) return list;
+  if (node.type === 'rel') list.push(node);
+  if (node.inner) collectRelations(node.inner, list);
+  if (node.left) collectRelations(node.left, list);
+  if (node.right) collectRelations(node.right, list);
+  return list;
+}
+
+function aliasesInTree(node) {
+  return collectRelations(node).map(r => r.alias || r.name);
+}
+
+function subtreeHasAlias(node, alias) {
+  return aliasesInTree(node).some(a => String(a).toUpperCase() === String(alias).toUpperCase());
+}
+
+function pushSelectionsToRelations(node, whereConds, steps) {
+  if (!node) return node;
+  const relationConds = whereConds.filter(conditionBelongsToSingleRelation);
+
+  function visit(n) {
+    if (!n) return n;
+    if (n.type === 'rel') {
+      const alias = n.alias || n.name;
+      const ownConds = relationConds.filter(cond =>
+        referencedAliases(cond).some(a => a.toUpperCase() === alias.toUpperCase())
+      );
+      if (!ownConds.length) return n;
+      let wrapped = n;
+      ownConds.forEach(cond => {
+        wrapped = { type: 'sigma', cond, inner: wrapped };
+      });
+      steps.push({
+        type: 'push-sigma',
+        label: `σ empurrada para ${relLabel(n)}`,
+        desc: `A seleção ${ownConds.join(' AND ')} usa somente atributos de ${relLabel(n)}, então pode ser aplicada antes da junção para reduzir tuplas.`,
+        tree: deepCopy(wrapped)
+      });
+      return wrapped;
+    }
+    if (n.inner) n.inner = visit(n.inner);
+    if (n.left) n.left = visit(n.left);
+    if (n.right) n.right = visit(n.right);
+    return n;
   }
 
-  return node;
+  const result = visit(deepCopy(node));
+  if (!relationConds.length) {
+    steps.push({
+      type: 'push-sigma',
+      label: 'Nenhuma seleção pôde ser empurrada para relação única',
+      desc: 'Não havia condições WHERE dependentes de apenas uma tabela.',
+      tree: deepCopy(result)
+    });
+  }
+  return result;
+}
+
+function collectJoinConditions(node, list = []) {
+  if (!node) return list;
+  if (node.type === 'equi' || node.type === 'theta') list.push(node.cond);
+  if (node.inner) collectJoinConditions(node.inner, list);
+  if (node.left) collectJoinConditions(node.left, list);
+  if (node.right) collectJoinConditions(node.right, list);
+  return list;
+}
+
+function collectRequiredAttributes(tree, finalAttrs) {
+  const required = {};
+  const rels = collectRelations(tree);
+  rels.forEach(r => { required[r.alias || r.name] = new Set(); });
+
+  function addQualified(expr) {
+    const re = /\b([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\b/g;
+    let m;
+    while ((m = re.exec(expr)) !== null) {
+      if (!required[m[1]]) required[m[1]] = new Set();
+      required[m[1]].add(m[2]);
+    }
+  }
+
+  addQualified(finalAttrs || '');
+  collectJoinConditions(tree).forEach(addQualified);
+  collectSigmaConditions(tree).forEach(addQualified);
+
+  // SELECT sem alias: resolve apenas se o atributo existir em uma única relação.
+  String(finalAttrs || '')
+    .split(',')
+    .map(a => a.trim())
+    .filter(Boolean)
+    .forEach(attr => {
+      if (attr === '*' || attr.includes('.')) return;
+      const matches = rels.filter(r => {
+        const tk = schemaKey(r.name);
+        return tk && SCHEMA[tk].fields.some(f => f.toUpperCase() === attr.toUpperCase());
+      });
+      if (matches.length === 1) {
+        const alias = matches[0].alias || matches[0].name;
+        required[alias].add(attr);
+      }
+    });
+
+  return required;
+}
+
+function collectSigmaConditions(node, list = []) {
+  if (!node) return list;
+  if (node.type === 'sigma') list.push(node.cond);
+  if (node.inner) collectSigmaConditions(node.inner, list);
+  if (node.left) collectSigmaConditions(node.left, list);
+  if (node.right) collectSigmaConditions(node.right, list);
+  return list;
+}
+
+function applyIntermediateProjections(node, finalAttrs, steps) {
+  const required = collectRequiredAttributes(node, finalAttrs);
+
+  function visit(n) {
+    if (!n) return n;
+
+    if (n.type === 'sigma' && n.inner && n.inner.type === 'rel') {
+      const rel = n.inner;
+      const alias = rel.alias || rel.name;
+      const attrs = Array.from(required[alias] || []);
+      if (!attrs.length) return n;
+      const projected = { type: 'pi', attrs: attrs.map(a => `${alias}.${a}`).join(', '), inner: n };
+      steps.push({
+        type: 'push-pi',
+        label: `π intermediária em ${relLabel(rel)}`,
+        desc: `Depois da seleção, mantém apenas atributos necessários ao SELECT final, WHERE e JOIN: ${projected.attrs}.`,
+        tree: deepCopy(projected)
+      });
+      return projected;
+    }
+
+    if (n.type === 'rel') {
+      const alias = n.alias || n.name;
+      const attrs = Array.from(required[alias] || []);
+      if (!attrs.length) return n;
+      const projected = { type: 'pi', attrs: attrs.map(a => `${alias}.${a}`).join(', '), inner: n };
+      steps.push({
+        type: 'push-pi',
+        label: `π intermediária em ${relLabel(n)}`,
+        desc: `Mantém somente atributos necessários antes da junção: ${projected.attrs}.`,
+        tree: deepCopy(projected)
+      });
+      return projected;
+    }
+
+    if (n.inner) n.inner = visit(n.inner);
+    if (n.left) n.left = visit(n.left);
+    if (n.right) n.right = visit(n.right);
+    return n;
+  }
+
+  return visit(deepCopy(node));
+}
+
+function relationScore(node) {
+  if (!node) return 0;
+  if (node.type === 'sigma') return 10 + relationScore(node.inner);
+  if (node.type === 'pi') return relationScore(node.inner);
+  if (node.type === 'rel') return 1;
+  return 0;
+}
+
+function reorderJoinTree(node, steps) {
+  function visit(n) {
+    if (!n) return n;
+    if (n.inner) n.inner = visit(n.inner);
+    if (n.left) n.left = visit(n.left);
+    if (n.right) n.right = visit(n.right);
+
+    if ((n.type === 'equi' || n.type === 'theta') && n.left && n.right) {
+      const leftAliases = aliasesInTree(n.left);
+      const rightAliases = aliasesInTree(n.right);
+      const condAliases = referencedAliases(n.cond);
+      const canSwap = condAliases.every(a =>
+        leftAliases.some(x => x.toUpperCase() === a.toUpperCase()) ||
+        rightAliases.some(x => x.toUpperCase() === a.toUpperCase())
+      );
+      if (canSwap && relationScore(n.right) > relationScore(n.left)) {
+        const swapped = { ...n, left: n.right, right: n.left };
+        steps.push({
+          type: 'reorder-join',
+          label: `Reordenação de JOIN: ${n.cond}`,
+          desc: 'Relações/subárvores com seleção foram priorizadas no lado esquerdo para evidenciar a execução mais restritiva primeiro, sem alterar a condição da junção.',
+          tree: deepCopy(swapped)
+        });
+        return swapped;
+      }
+      steps.push({
+        type: 'reorder-join',
+        label: `JOIN preservado: ${n.cond}`,
+        desc: 'A junção já respeita as dependências lógicas e evita produto cartesiano, pois possui condição ON explícita.',
+        tree: deepCopy(n)
+      });
+    }
+    return n;
+  }
+  return visit(deepCopy(node));
 }

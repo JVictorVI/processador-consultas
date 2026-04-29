@@ -120,7 +120,7 @@ function renderOtimizacao(optResult, optimizedGraph) {
 
   // Adicionar o grafo otimizado
   h += `<div class="section-label">Grafo Otimizado</div>`;
-  h += buildGraphHtml(optimizedTree);
+  h += `<div class="exec-tree"><div class="graph-canvas ${typeof getGraphZoomClass === "function" ? getGraphZoomClass(optimizedGraph) : "graph-zoom-default"}">${buildGraphHtml(optimizedTree)}</div></div>`;
 
   h += `</div>`;
   return h;
@@ -264,8 +264,103 @@ function processar() {
       dotO.style.background = "var(--warn)";
       dotO.style.boxShadow = "0 0 8px var(--warn)";
       otimizacaoPanel.innerHTML = `<div style="padding:14px">${renderOtimizacao(optResult, optimizedGraph)}</div>`;
+
+      initGraphPanAndCenter();
     }
   }
+}
+
+
+// ═══════════════════════════════════════════════════════
+//  GRAFO — clicar e arrastar para explorar
+// ═══════════════════════════════════════════════════════
+function initGraphPanAndCenter() {
+  document.querySelectorAll(".exec-tree").forEach((el) => {
+    enableGraphPan(el);
+    centerGraphViewport(el);
+  });
+}
+
+function centerGraphViewport(el) {
+  if (!el || el.dataset.centered === "true") return;
+
+  requestAnimationFrame(() => {
+    const canScrollX = el.scrollWidth > el.clientWidth;
+    const canScrollY = el.scrollHeight > el.clientHeight;
+
+    if (canScrollX) {
+      el.scrollLeft = Math.max(0, (el.scrollWidth - el.clientWidth) / 2);
+    }
+
+    // Mantém o topo visível por padrão. Só centraliza verticalmente se o grafo
+    // for muito mais alto que o container, para não esconder a raiz.
+    if (canScrollY && el.scrollHeight > el.clientHeight * 1.8) {
+      el.scrollTop = 0;
+    }
+
+    el.dataset.centered = "true";
+  });
+}
+
+function enableGraphPan(el) {
+  if (!el || el.dataset.panEnabled === "true") return;
+
+  el.dataset.panEnabled = "true";
+  el.classList.add("graph-pan-enabled");
+
+  let isDown = false;
+  let startX = 0;
+  let startY = 0;
+  let startLeft = 0;
+  let startTop = 0;
+  let moved = false;
+
+  el.addEventListener("pointerdown", (ev) => {
+    // Botão esquerdo do mouse, touch ou caneta.
+    if (ev.pointerType === "mouse" && ev.button !== 0) return;
+
+    isDown = true;
+    moved = false;
+    startX = ev.clientX;
+    startY = ev.clientY;
+    startLeft = el.scrollLeft;
+    startTop = el.scrollTop;
+
+    el.classList.add("is-panning");
+    el.setPointerCapture?.(ev.pointerId);
+  });
+
+  el.addEventListener("pointermove", (ev) => {
+    if (!isDown) return;
+
+    const dx = ev.clientX - startX;
+    const dy = ev.clientY - startY;
+
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) moved = true;
+
+    el.scrollLeft = startLeft - dx;
+    el.scrollTop = startTop - dy;
+    ev.preventDefault();
+  });
+
+  const stopPan = (ev) => {
+    if (!isDown) return;
+    isDown = false;
+    el.classList.remove("is-panning");
+    el.releasePointerCapture?.(ev.pointerId);
+  };
+
+  el.addEventListener("pointerup", stopPan);
+  el.addEventListener("pointercancel", stopPan);
+  el.addEventListener("pointerleave", stopPan);
+
+  // Evita seleção/click acidental quando o usuário arrastou o grafo.
+  el.addEventListener("click", (ev) => {
+    if (!moved) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    moved = false;
+  }, true);
 }
 
 function copiarAlgebra() {
@@ -280,6 +375,7 @@ function copiarAlgebra() {
 //  TABS / UTILITÁRIOS
 // ═══════════════════════════════════════════════════════
 function switchTab(name) {
+  document.body.dataset.tab = name;
   document
     .querySelectorAll(".tab")
     .forEach((t) => t.classList.remove("active"));
@@ -333,3 +429,4 @@ function loadEx(i) {
 //  INIT
 // ═══════════════════════════════════════════════════════
 buildSchema();
+document.body.dataset.tab = "validacao";

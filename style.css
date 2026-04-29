@@ -1111,3 +1111,320 @@ header {
   font-size: 0.8rem;
   font-weight: 700;
 }
+
+/* ═══════════════════════════════════════════════════════
+   AJUSTES DE VISUALIZAÇÃO DO GRAFO / ÁRVORE
+   - dá mais largura ao painel do grafo e da otimização
+   - evita que expressões longas fiquem espremidas em colunas estreitas
+   - permite rolagem horizontal/vertical quando a árvore é grande
+═══════════════════════════════════════════════════════ */
+
+body[data-tab="grafo"] .main-grid,
+body[data-tab="otimizacao"] .main-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+body[data-tab="grafo"] .main-grid > .col:nth-child(2),
+body[data-tab="otimizacao"] .main-grid > .col:nth-child(2) {
+  display: none;
+}
+
+body[data-tab="grafo"] .container,
+body[data-tab="otimizacao"] .container {
+  max-width: 1480px;
+}
+
+.graph-reading-hint {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  backdrop-filter: blur(10px);
+}
+
+.exec-tree {
+  margin: 14px;
+  padding: 18px 12px 22px;
+  overflow: auto;
+  max-height: 72vh;
+  border: 1px solid rgba(30, 45, 69, 0.75);
+  border-radius: 12px;
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(0, 229, 255, 0.055),
+      transparent 34%
+    ),
+    rgba(3, 7, 18, 0.22);
+}
+
+.exec-tree::-webkit-scrollbar,
+.graph-table-wrap::-webkit-scrollbar,
+.algebra-expr::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.exec-tree::-webkit-scrollbar-thumb,
+.graph-table-wrap::-webkit-scrollbar-thumb,
+.algebra-expr::-webkit-scrollbar-thumb {
+  background: rgba(96, 165, 250, 0.35);
+  border-radius: 999px;
+}
+
+.exec-tree::-webkit-scrollbar-track,
+.graph-table-wrap::-webkit-scrollbar-track,
+.algebra-expr::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.7);
+  border-radius: 999px;
+}
+
+.graph-canvas {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  width: max-content;
+  min-width: 100%;
+  padding: 12px 42px 30px;
+}
+
+.tree-node {
+  flex-shrink: 0;
+}
+
+.tree-box {
+  min-width: 112px;
+  max-width: 360px;
+  padding: 10px 14px;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+}
+
+.tree-box.node-pi {
+  min-width: 150px;
+}
+
+.tree-box.node-sigma {
+  min-width: 150px;
+}
+
+.tree-box.node-join {
+  min-width: 230px;
+}
+
+.tree-box.node-rel {
+  min-width: 96px;
+}
+
+.tree-label {
+  max-width: 320px;
+  white-space: pre-wrap;
+  word-break: normal;
+  overflow-wrap: anywhere;
+  hyphens: none;
+  font-size: 0.66rem;
+  line-height: 1.45;
+}
+
+.node-rel .tree-label {
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.tree-symbol {
+  margin-bottom: 2px;
+}
+
+.tree-connector,
+.tree-child-line {
+  height: 32px;
+}
+
+.tree-children {
+  gap: 34px;
+  padding-top: 0;
+}
+
+.tree-children::before {
+  width: calc(100% - 120px);
+  opacity: 0.9;
+}
+
+.tree-branch-gap {
+  width: 78px;
+}
+
+.graph-info-wrap {
+  padding: 0 14px 18px;
+}
+
+.graph-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.graph-table {
+  min-width: 720px;
+}
+
+.gt-label {
+  max-width: 520px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.algebra-expr {
+  overflow-x: auto;
+}
+
+@media (max-width: 820px) {
+  .tabs {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .tab {
+    white-space: nowrap;
+  }
+
+  .exec-tree {
+    max-height: 68vh;
+    margin: 10px;
+  }
+
+  .graph-canvas {
+    padding-inline: 24px;
+  }
+
+  .tree-box.node-join {
+    min-width: 190px;
+  }
+
+  .tree-label {
+    max-width: 260px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   ZOOM AUTOMÁTICO DO GRAFO
+   A árvore continua legível, mas ganha um campo de visão maior
+   quando a consulta possui muitos nós.
+═══════════════════════════════════════════════════════ */
+.graph-canvas {
+  transform-origin: top center;
+  transition:
+    transform 0.18s ease,
+    zoom 0.18s ease;
+}
+
+.graph-canvas.graph-zoom-default {
+  zoom: 1;
+}
+
+.graph-canvas.graph-zoom-md {
+  zoom: 0.84;
+}
+
+.graph-canvas.graph-zoom-sm {
+  zoom: 0.72;
+}
+
+.graph-canvas.graph-zoom-xs {
+  zoom: 0.6;
+}
+
+/* Fallback para navegadores que não aplicam zoom em elementos comuns. */
+@supports not (zoom: 1) {
+  .graph-canvas.graph-zoom-default {
+    transform: scale(1);
+  }
+
+  .graph-canvas.graph-zoom-md {
+    transform: scale(0.84);
+  }
+
+  .graph-canvas.graph-zoom-sm {
+    transform: scale(0.72);
+  }
+
+  .graph-canvas.graph-zoom-xs {
+    transform: scale(0.6);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   NAVEGAÇÃO DO GRAFO: CLICAR E ARRASTAR
+   Permite explorar grafos grandes como se fosse um canvas.
+═══════════════════════════════════════════════════════ */
+.exec-tree.graph-pan-enabled {
+  cursor: grab;
+  user-select: none;
+  overscroll-behavior: contain;
+  scroll-behavior: auto;
+}
+
+.exec-tree.graph-pan-enabled:active,
+.exec-tree.graph-pan-enabled.is-panning {
+  cursor: grabbing;
+}
+
+.exec-tree.graph-pan-enabled.is-panning * {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
+
+.graph-pan-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 229, 255, 0.22);
+  background: rgba(0, 229, 255, 0.07);
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  white-space: nowrap;
+}
+
+@media (max-width: 820px) {
+  .graph-reading-hint {
+    align-items: flex-start;
+  }
+
+  .graph-pan-help {
+    display: none;
+  }
+}
+
+/* ── Estado vazio da Otimização (HU4) ───────────────── */
+.otimizacao-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 190px;
+  padding: 42px 20px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.otimizacao-empty .empty-icon {
+  display: block;
+  width: auto;
+  height: auto;
+  margin-bottom: 10px;
+  line-height: 1;
+  font-size: 2.2rem;
+  color: var(--warn);
+}
+
+.otimizacao-empty p {
+  max-width: 420px;
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+body[data-tab="otimizacao"] #otimizacao-panel {
+  min-height: 190px;
+}
