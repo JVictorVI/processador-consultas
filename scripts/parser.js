@@ -36,6 +36,14 @@ function isIdentifier(tok) {
 //  TOKENIZADOR — gera lista de tokens para exibição
 // ═══════════════════════════════════════════════════════
 
+/** Normaliza a consulta para o subconjunto aceito pelo trabalho. */
+function cleanSqlInput(sql) {
+  return String(sql || "")
+    .replace(/;\s*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function tokenize(sql) {
   const toks = [];
   const re =
@@ -528,7 +536,7 @@ function parse(rawSQL) {
   const errors = [];
 
   // ── 1) Pré-processamento ─────────────────────────────
-  const sql = rawSQL.replace(/\s+/g, " ").trim();
+  const sql = cleanSqlInput(rawSQL);
   const upper = sql.toUpperCase();
 
   if (!sql) {
