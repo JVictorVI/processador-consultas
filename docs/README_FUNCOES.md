@@ -6,6 +6,7 @@ Este documento explica as principais constantes e funções criadas em cada arqu
 
 ```text
 schema.js
+parserUtils.js
 parser.js
 algebra.js
 grafo.js
@@ -50,9 +51,9 @@ A ordem evita ambiguidade ao procurar operadores compostos antes dos simples.
 
 Lista de consultas SQL usadas pelos botões de exemplo do editor. Inclui consultas válidas e consultas com erro para testar a validação.
 
-## `scripts/parser.js`
+## `scripts/parserUtils.js`
 
-Arquivo responsável pela validação sintática e semântica da consulta SQL.
+Arquivo responsável pelos utilitários usados pelo parser. Ele precisa ser carregado depois de `schema.js` e antes de `parser.js`, porque depende das constantes do schema e fornece funções usadas pela validação principal.
 
 ### `schemaKey(name)`
 
@@ -81,24 +82,12 @@ Verifica se um token tem formato de identificador SQL simples e não é literal.
 Normaliza a consulta digitada:
 
 - remove ponto e vírgula final;
-- troca sequências de espaços por um único espaco;
+- troca sequências de espaços por um único espaço;
 - remove espaços no início e no fim.
 
 ### `tokenize(sql)`
 
 Divide a consulta em tokens para exibição e classificação. Reconhece identificadores, atributos qualificados, operadores, parênteses, vírgulas, asterisco, números e strings.
-
-### `classifyTok(tok)`
-
-Classifica um token para a interface:
-
-- palavra-chave;
-- tabela;
-- atributo;
-- operador;
-- outro.
-
-Essa classificação define as cores dos tokens na aba de validação.
 
 ### `validateCondition(condRaw, usedTables, errors, ctx)`
 
@@ -167,6 +156,10 @@ Extrai todos os blocos `JOIN ... ON ...` da consulta e valida:
 
 Retorna uma lista de joins com tabela e condição.
 
+## `scripts/parser.js`
+
+Arquivo responsável pela validação sintática e semântica principal da consulta SQL. Ele coordena o fluxo da HU1 usando os utilitários de `parserUtils.js`.
+
 ### `parse(rawSQL)`
 
 Função principal do parser. Coordena toda a HU1.
@@ -201,6 +194,18 @@ Gera uma forma canônica para um atributo do `SELECT`. Ajuda a detectar atributo
 ### `hasInvalidSymbolicOperator(expr)`
 
 Detecta símbolos e combinações de operadores que estão fora do escopo, como `%`, `*=`, `!=`, `==` e outros usos inválidos.
+
+### `classifyTok(tok)`
+
+Classifica um token para a interface:
+
+- palavra-chave;
+- tabela;
+- atributo;
+- operador;
+- outro.
+
+Essa função é usada pela renderização da validação para colorir os tokens encontrados.
 
 ## `scripts/algebra.js`
 

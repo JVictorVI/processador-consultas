@@ -40,6 +40,7 @@ http://localhost:8000
 +-- style.css
 +-- scripts/
     +-- schema.js
+    +-- parserUtils.js
     +-- parser.js
     +-- algebra.js
     +-- grafo.js
@@ -52,7 +53,7 @@ http://localhost:8000
 Define a interface da aplicação: editor SQL, abas de resultado, painel do modelo de dados, lista de operadores aceitos e botões de exemplo. Os scripts são carregados no final da página nesta ordem:
 
 ```html
-schema.js -> parser.js -> algebra.js -> grafo.js -> plano.js -> app.js
+schema.js -> parserUtils.js -> parser.js -> algebra.js -> grafo.js -> plano.js -> app.js
 ```
 
 Essa ordem importa porque os arquivos compartilham funções e constantes no escopo global do navegador.
@@ -86,14 +87,45 @@ As tabelas cadastradas são:
 - `Pedido`
 - `Pedido_has_Produto`
 
-### `scripts/parser.js`
+### `scripts/parserUtils.js`
 
-Responsável pela HU1. Ele recebe o SQL digitado, normaliza a string e valida se a consulta está dentro do subconjunto aceito pelo projeto.
+Centraliza os utilitários usados pelo parser. Ele reúne funções léxicas, funções de validação de condições e funções de validação de `JOIN`.
 
 Principais responsabilidades:
 
 - remover ponto e vírgula final e normalizar espaços;
 - tokenizar a consulta para exibição na tela;
+- procurar tabelas no `SCHEMA`;
+- validar literais e identificadores;
+- dividir condições compostas por `AND`;
+- validar operandos de comparações;
+- validar blocos `JOIN ... ON ...`.
+
+As funções principais desse arquivo são:
+
+- `schemaKey()`;
+- `isReserved()`;
+- `isLiteral()`;
+- `isIdentifier()`;
+- `cleanSqlInput()`;
+- `tokenize()`;
+- `validateCondition()`;
+- `splitByAnd()`;
+- `validateAtom()`;
+- `findTablesContainingAttribute()`;
+- `isWrapped()`;
+- `findOperatorIndex()`;
+- `validateOperand()`;
+- `extractAndValidateJoins()`.
+
+### `scripts/parser.js`
+
+Responsável pelo fluxo principal da HU1. Ele recebe o SQL digitado, coordena a validação e, quando a consulta está correta, gera a estrutura `parsed` usada pelas próximas etapas.
+
+Esse arquivo depende dos utilitários definidos em `scripts/parserUtils.js`, por isso `parserUtils.js` precisa ser carregado antes de `parser.js` no `index.html`.
+
+Principais responsabilidades de `parser.js`:
+
 - validar se a consulta começa com `SELECT` e possui `FROM`;
 - identificar tabelas declaradas em `FROM` e `JOIN`;
 - validar existência de tabelas e atributos contra o `SCHEMA`;
@@ -341,4 +373,5 @@ A árvore otimizada é percorrida de baixo para cima. O resultado é uma sequên
 - O schema é fixo e está definido em `scripts/schema.js`.
 - O objetivo é educacional: visualizar as etapas de processamento de consultas.
 - As funções usam escopo global, porque os scripts são carregados diretamente pelo HTML, sem bundler ou sistema de módulos.
+- A ordem dos scripts no `index.html` é obrigatória: `schema.js` define os dados, `parserUtils.js` define os utilitários, `parser.js` usa esses utilitários, e os demais arquivos usam o resultado do parser.
 - Para alterar o modelo de dados, edite o objeto `SCHEMA` e, se necessário, a lista `FK_FIELDS`.
