@@ -145,6 +145,7 @@ function parse(rawSQL) {
 
   // Tabela base (FROM) — apelidos de tabela não são suportados.
   const fromM = sql.match(
+    // se tiver algo depois do ? é pq eh um AS sem suporte, ex: FROM Vendas AS v
     /\bFROM\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s+([A-Za-z_][A-Za-z0-9_]*))?(?=\s+JOIN\b|\s+WHERE\b|\s*$)/i,
   );
   if (fromM) {
