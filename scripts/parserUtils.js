@@ -37,6 +37,38 @@ function cleanSqlInput(sql) {
     .trim();
 }
 
+function extractParsed(sql, usedTables, validatedJoins = null) {
+  sql = cleanSqlInput(sql);
+  const selM = sql.match(/\bSELECT\s+([\s\S]+?)\s+\bFROM\b/i);
+  const selectCols = selM ? selM[1].trim() : "*";
+
+  const frM = sql.match(
+    /\bFROM\s+([A-Za-z_][A-Za-z0-9_]*)(?=\s+JOIN\b|\s+WHERE\b|\s*$)/i,
+  );
+  const fromTable = frM ? schemaKey(frM[1]) || frM[1] : null;
+  const joins = Array.isArray(validatedJoins) ? [...validatedJoins] : [];
+  if (!joins.length) {
+    const joinBlockRe =
+      /\bJOIN\s+([\s\S]+?)(?=\s+\bJOIN\b|\s+\bWHERE\b|\s*$)/gi;
+    let jm;
+    while ((jm = joinBlockRe.exec(sql)) !== null) {
+      const block = jm[1].trim();
+      const bm = block.match(
+        /^([A-Za-z_][A-Za-z0-9_]*)\s+ON\s+([\s\S]+)$/i,
+      );
+      if (bm) {
+        const table = schemaKey(bm[1]) || bm[1];
+        joins.push({ table, condition: bm[2].trim() });
+      }
+    }
+  }
+
+  const whereM = sql.match(/\bWHERE\s+([\s\S]+)$/i);
+  const whereCond = whereM ? whereM[1].trim() : null;
+
+  return { selectCols, fromTable, joins, whereCond, usedTables };
+}
+
 function tokenize(sql) {
   const toks = [];
   const re =
@@ -285,6 +317,19 @@ function findTablesContainingAttribute(attr, usedTables) {
     );
 }
 
+function referencedTablesInExpression(expr) {
+  const refs = new Set();
+  const re = /\b([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\b/g;
+  let m;
+
+  while ((m = re.exec(expr)) !== null) {
+    const tableName = schemaKey(m[1]);
+    if (tableName) refs.add(tableName);
+  }
+
+  return Array.from(refs);
+}
+
 /**
  * Verifica se a string está totalmente envolvida por um par de parênteses
  * Ex: "(a = b)" → true,  "(a) = (b)" → false
@@ -494,19 +539,6 @@ function extractAndValidateJoins(sql, usedTables, errors) {
         `Cláusula ON do JOIN com '${joinTableName}' deve conectar '${joinTableName}' a uma tabela já declarada no FROM/JOIN.`,
       );
     }
-  }
-
-  function referencedTablesInExpression(expr) {
-    const refs = new Set();
-    const re = /\b([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\b/g;
-    let m;
-
-    while ((m = re.exec(expr)) !== null) {
-      const tableName = schemaKey(m[1]);
-      if (tableName) refs.add(tableName);
-    }
-
-    return Array.from(refs);
   }
 
   return joins;

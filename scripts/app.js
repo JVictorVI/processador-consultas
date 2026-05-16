@@ -1,8 +1,3 @@
-/* ═══════════════════════════════════════════════════════
-   PROCESSADOR DE CONSULTAS SQL — HU1 + HU2 + HU3 + HU4 + HU5
-   app.js — Interface, renderização e ponto de entrada
-   Depende de: schema.js, parser.js, algebra.js, grafo.js, plano.js
-═══════════════════════════════════════════════════════ */
 "use strict";
 
 // ═══════════════════════════════════════════════════════
