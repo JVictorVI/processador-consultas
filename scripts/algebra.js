@@ -1,17 +1,8 @@
 /* ═══════════════════════════════════════════════════════
    PROCESSADOR DE CONSULTAS SQL — HU2 + HU4
    algebra.js — Conversão para Álgebra Relacional e Otimização
-   Depende de: schema.js, parser.js
 ═══════════════════════════════════════════════════════ */
 "use strict";
-
-function cleanSqlInputForAlgebra(sql) {
-  if (typeof cleanSqlInput === "function") return cleanSqlInput(sql);
-  return String(sql || "")
-    .replace(/;\s*$/, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
 
 function canonicalTableName(name) {
   return schemaKey(name) || name;
@@ -30,36 +21,6 @@ function qualifyAttr(tableName, fieldName) {
   const table = canonicalTableName(tableName);
   const field = canonicalFieldName(table, fieldName);
   return `${table}.${field}`;
-}
-
-// ═══════════════════════════════════════════════════════
-//  EXTRATOR DE ESTRUTURA PARSED (para HU2)
-// ═══════════════════════════════════════════════════════
-function extractParsed(sql, usedTables) {
-  sql = cleanSqlInputForAlgebra(sql);
-  const selM = sql.match(/\bSELECT\s+([\s\S]+?)\s+\bFROM\b/i);
-  const selectCols = selM ? selM[1].trim() : "*";
-
-  const frM = sql.match(
-    /\bFROM\s+([A-Za-z_][A-Za-z0-9_]*)(?=\s+JOIN\b|\s+WHERE\b|\s*$)/i,
-  );
-  const fromTable = frM ? schemaKey(frM[1]) || frM[1] : null;
-  const joins = [];
-  const joinBlockRe = /\bJOIN\s+([\s\S]+?)(?=\s+\bJOIN\b|\s+\bWHERE\b|\s*$)/gi;
-  let jm;
-  while ((jm = joinBlockRe.exec(sql)) !== null) {
-    const block = jm[1].trim();
-    const bm = block.match(/^([A-Za-z_][A-Za-z0-9_]*)\s+ON\s+([\s\S]+)$/i);
-    if (bm) {
-      const table = schemaKey(bm[1]) || bm[1];
-      joins.push({ table, condition: bm[2].trim() });
-    }
-  }
-
-  const whereM = sql.match(/\bWHERE\s+([\s\S]+)$/i);
-  const whereCond = whereM ? whereM[1].trim() : null;
-
-  return { selectCols, fromTable, joins, whereCond, usedTables };
 }
 
 // ═══════════════════════════════════════════════════════
@@ -316,35 +277,18 @@ function extractTopSigma(node) {
   const conds = [];
   let current = deepCopy(node);
   while (current && current.type === "sigma") {
-    conds.push(...splitWhereConditions(current.cond));
+    conds.push(
+      ...splitByAnd(current.cond)
+        .map((s) => s.trim())
+        .filter(Boolean),
+    );
     current = current.inner;
   }
   return { inner: current, conds };
 }
 
-function splitWhereConditions(cond) {
-  if (!cond) return [];
-  if (typeof splitByAnd === "function")
-    return splitByAnd(cond)
-      .map((s) => s.trim())
-      .filter(Boolean);
-  return String(cond)
-    .split(/\s+AND\s+/i)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
 function referencedTables(expr) {
-  const refs = new Set();
-  const re = /\b([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\b/g;
-  let m;
-
-  while ((m = re.exec(expr)) !== null) {
-    const canonical = schemaKey(m[1]) || m[1];
-    refs.add(canonical);
-  }
-
-  return Array.from(refs);
+  return referencedTablesInExpression(expr);
 }
 
 function conditionBelongsToSingleRelation(cond, relations = []) {

@@ -300,7 +300,7 @@ function parse(rawSQL) {
   }
 
   // ── 7) Valida blocos JOIN individualmente ─────────────
-  extractAndValidateJoins(sql, usedTables, errors);
+  const joins = extractAndValidateJoins(sql, usedTables, errors);
 
   // ── 8) Valida condição WHERE ──────────────────────────
   // WHERE vem sempre após os JOINs; captura até o fim da string.
@@ -310,6 +310,6 @@ function parse(rawSQL) {
   }
 
   const ok = errors.length === 0;
-  const parsed = ok ? extractParsed(sql, usedTables) : null;
+  const parsed = ok ? extractParsed(sql, usedTables, joins) : null;
   return { errors, tokens: rawToks, usedTables, parsed };
 }

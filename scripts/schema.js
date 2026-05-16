@@ -1,43 +1,130 @@
-/* ═══════════════════════════════════════════════════════
-   PROCESSADOR DE CONSULTAS SQL — HU1 + HU2 + HU3 + HU4 + HU5
-   schema.js — Metadados do banco de dados, constantes e exemplos
-═══════════════════════════════════════════════════════ */
-'use strict';
+"use strict";
 
 // ═══════════════════════════════════════════════════════
 //  SCHEMA — metadados do banco de dados
 // ═══════════════════════════════════════════════════════
 const SCHEMA = {
-  Categoria:          { pk: 'idCategoria',      fields: ['idCategoria','Descricao'] },
-  Produto:            { pk: 'idProduto',        fields: ['idProduto','Nome','Descricao','Preco','QuantEstoque','Categoria_idCategoria'] },
-  TipoCliente:        { pk: 'idTipoCliente',    fields: ['idTipoCliente','Descricao'] },
-  Cliente:            { pk: 'idCliente',        fields: ['idCliente','Nome','Email','Nascimento','Senha','TipoCliente_idTipoCliente','DataRegistro'] },
-  TipoEndereco:       { pk: 'idTipoEndereco',   fields: ['idTipoEndereco','Descricao'] },
-  Endereco:           { pk: 'idEndereco',       fields: ['idEndereco','EnderecoPadrao','Logradouro','Numero','Complemento','Bairro','Cidade','UF','CEP','TipoEndereco_idTipoEndereco','Cliente_idCliente'] },
-  Telefone:           { pk: null,               fields: ['Numero','Cliente_idCliente'] },
-  Status:             { pk: 'idStatus',         fields: ['idStatus','Descricao'] },
-  Pedido:             { pk: 'idPedido',         fields: ['idPedido','Status_idStatus','DataPedido','ValorTotalPedido','Cliente_idCliente'] },
-  Pedido_has_Produto: { pk: 'idPedidoProduto',  fields: ['idPedidoProduto','Pedido_idPedido','Produto_idProduto','Quantidade','PrecoUnitario'] }
+  Categoria: { pk: "idCategoria", fields: ["idCategoria", "Descricao"] },
+  Produto: {
+    pk: "idProduto",
+    fields: [
+      "idProduto",
+      "Nome",
+      "Descricao",
+      "Preco",
+      "QuantEstoque",
+      "Categoria_idCategoria",
+    ],
+  },
+  TipoCliente: { pk: "idTipoCliente", fields: ["idTipoCliente", "Descricao"] },
+  Cliente: {
+    pk: "idCliente",
+    fields: [
+      "idCliente",
+      "Nome",
+      "Email",
+      "Nascimento",
+      "Senha",
+      "TipoCliente_idTipoCliente",
+      "DataRegistro",
+    ],
+  },
+  TipoEndereco: {
+    pk: "idTipoEndereco",
+    fields: ["idTipoEndereco", "Descricao"],
+  },
+  Endereco: {
+    pk: "idEndereco",
+    fields: [
+      "idEndereco",
+      "EnderecoPadrao",
+      "Logradouro",
+      "Numero",
+      "Complemento",
+      "Bairro",
+      "Cidade",
+      "UF",
+      "CEP",
+      "TipoEndereco_idTipoEndereco",
+      "Cliente_idCliente",
+    ],
+  },
+  Telefone: { pk: "Numero", fields: ["Numero", "Cliente_idCliente"] },
+  Status: { pk: "idStatus", fields: ["idStatus", "Descricao"] },
+  Pedido: {
+    pk: "idPedido",
+    fields: [
+      "idPedido",
+      "Status_idStatus",
+      "DataPedido",
+      "ValorTotalPedido",
+      "Cliente_idCliente",
+    ],
+  },
+  Pedido_has_Produto: {
+    pk: "idPedidoProduto",
+    fields: [
+      "idPedidoProduto",
+      "Pedido_idPedido",
+      "Produto_idProduto",
+      "Quantidade",
+      "PrecoUnitario",
+    ],
+  },
 };
 
 // Campos que são chaves estrangeiras (para destaque visual no schema)
 const FK_FIELDS = [
-  'Categoria_idCategoria','TipoCliente_idTipoCliente','TipoEndereco_idTipoEndereco',
-  'Cliente_idCliente','Status_idStatus','Pedido_idPedido','Produto_idProduto'
+  "Categoria_idCategoria",
+  "TipoCliente_idTipoCliente",
+  "TipoEndereco_idTipoEndereco",
+  "Cliente_idCliente",
+  "Status_idStatus",
+  "Pedido_idPedido",
+  "Produto_idProduto",
 ];
 
 // Palavras-chave SQL reservadas neste trabalho
 const RESERVED = new Set([
-  'SELECT','FROM','WHERE','JOIN','ON','AND','AS',
-  'INNER','LEFT','RIGHT','FULL','OUTER',
-  'OR','NOT','LIKE','IN','BETWEEN','IS',
-  'GROUP','ORDER','BY','HAVING','DISTINCT','LIMIT',
-  'UNION','INTERSECT','EXCEPT','INSERT','UPDATE','DELETE',
-  'COUNT','SUM','AVG','MIN','MAX'
+  "SELECT",
+  "FROM",
+  "WHERE",
+  "JOIN",
+  "ON",
+  "AND",
+  "AS",
+  "INNER",
+  "LEFT",
+  "RIGHT",
+  "FULL",
+  "OUTER",
+  "OR",
+  "NOT",
+  "LIKE",
+  "IN",
+  "BETWEEN",
+  "IS",
+  "GROUP",
+  "ORDER",
+  "BY",
+  "HAVING",
+  "DISTINCT",
+  "LIMIT",
+  "UNION",
+  "INTERSECT",
+  "EXCEPT",
+  "INSERT",
+  "UPDATE",
+  "DELETE",
+  "COUNT",
+  "SUM",
+  "AVG",
+  "MIN",
+  "MAX",
 ]);
 
 // Operadores de comparação suportados (ordem: maior → menor, evita ambiguidade)
-const CMP_OPS = ['<>', '>=', '<=', '=', '>', '<'];
+const CMP_OPS = ["<>", ">=", "<=", "=", ">", "<"];
 
 // ─────────────────────────────────────────────────────
 //  Exemplos de teste (chips do editor)
@@ -62,5 +149,5 @@ const EXAMPLES = [
   // 8 - Erro: JOIN sem ON
   `SELECT Nome FROM Cliente JOIN Pedido`,
   // 9 - Erro: operador fora do escopo
-  `SELECT Nome FROM Cliente WHERE Nome LIKE 'Ana%'`
+  `SELECT Nome FROM Cliente WHERE Nome LIKE 'Ana%'`,
 ];
