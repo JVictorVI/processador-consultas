@@ -118,7 +118,7 @@ Verifica:
 - parênteses balanceados;
 - uso inválido de `AND`;
 - predicados separados por `AND`;
-- operandos e operadores de comparação.
+- presença dos operandos e operadores de comparação.
 
 ### `splitByAnd(cond)`
 
@@ -132,7 +132,7 @@ Valida um predicado individual, como:
 Produto.Preco > 50
 ```
 
-Identifica o operador, separa os operandos e valida cada lado.
+Identifica o operador, separa os operandos e verifica se os dois lados da comparação estão presentes.
 
 ### `findTablesContainingAttribute(attr, usedTables)`
 
@@ -149,17 +149,6 @@ Verifica se uma expressão inteira está envolvida por um par externo de parênt
 ### `findOperatorIndex(expr, op)`
 
 Encontra a posição de um operador de comparação fora de parênteses.
-
-### `validateOperand(tok, usedTables, errors, ctx)`
-
-Valida um operando de comparação. Aceita:
-
-- literal numérico;
-- literal de texto;
-- atributo qualificado;
-- atributo simples não ambíguo.
-
-Também valida se a tabela foi declarada e se o atributo existe.
 
 ### `extractAndValidateJoins(sql, usedTables, errors)`
 

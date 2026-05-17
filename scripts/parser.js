@@ -153,11 +153,11 @@ function parse(rawSQL) {
       );
     }
 
-    usedTables.push({ name: canonicalName });
-
     if (!schemaKey(rawName)) {
       errors.push(`Tabela não encontrada no modelo: '${rawName}'.`);
     }
+
+    usedTables.push({ name: canonicalName });
   }
 
   // Pré-extrai tabelas dos JOINs para permitir validação de condições ON.
@@ -176,6 +176,7 @@ function parse(rawSQL) {
       );
     }
 
+    // Evita adicionar a mesma tabela múltiplas vezes se ela for referenciada em vários JOINs.
     if (
       !usedTables.some(
         (t) =>

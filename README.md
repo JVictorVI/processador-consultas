@@ -124,7 +124,6 @@ As funções principais desse arquivo são:
 - `referencedTablesInExpression()`;
 - `isWrapped()`;
 - `findOperatorIndex()`;
-- `validateOperand()`;
 - `extractAndValidateJoins()`;
 - `canonicalSelectAttr()`;
 - `hasInvalidSymbolicOperator()`.
@@ -505,7 +504,6 @@ As funções principais desse arquivo são:
 - `findTablesContainingAttribute()`;
 - `isWrapped()`;
 - `findOperatorIndex()`;
-- `validateOperand()`;
 - `extractAndValidateJoins()`.
 
 ### `scripts/parser.js`

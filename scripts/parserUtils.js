@@ -134,7 +134,7 @@ function classifyTok(tok) {
 //  2. AND em posição inválida (início, fim, duplicado, após '(' ou antes de ')')
 //  3. Divide por AND e valida cada predicado atômico
 //  4. Cada predicado: operando esquerdo + operador + operando direito
-//  5. Ambos os operandos são validados contra o schema
+//  5. Verifica se ambos os lados da comparação estão presentes
 // ═══════════════════════════════════════════════════════
 function validateCondition(condRaw, usedTables, errors, ctx) {
   if (!condRaw || !condRaw.trim()) return;
@@ -331,24 +331,22 @@ function validateAtom(atom, usedTables, errors, ctx) {
   const left = expr.slice(0, opIdx).trim(); //  Exemplo: "Produto.Preco > 50" -> left = "Produto.Preco"
   const right = expr.slice(opIdx + opFound.length).trim(); // Exemplo: "Produto.Preco > 50" -> right = "50"
 
+  // Exemplo de erro: "Produto.Preco >" (operando direito ausente)
   if (!left) {
     errors.push(
       `Operador de comparação sem operando à esquerda na cláusula ${ctx}.`,
     );
-  } else {
-    validateOperand(left, usedTables, errors, ctx);
   }
 
+  // Ex: "> 50" (operando esquerdo ausente)
   if (!right) {
     errors.push(
       `Operador de comparação sem operando à direita na cláusula ${ctx}.`,
     );
-  } else {
-    validateOperand(right, usedTables, errors, ctx);
   }
 }
 
-// Procura quais tabelas usadas na consulta possuem o atributo indicado, para validação de operandos simples.
+// Procura quais tabelas usadas na consulta possuem o atributo indicado.
 function findTablesContainingAttribute(attr, usedTables) {
   return usedTables
     .map((t) => schemaKey(t.name))
@@ -422,67 +420,6 @@ function findOperatorIndex(expr, op) {
   return -1;
 }
 
-/**
- * Valida um único operando de uma comparação:
- * - número ou string literal -> sempre válido
- * - Tabela.campo -> valida tabela declarada e campo no schema
- * - identificador isolado -> valida nas tabelas declaradas
- */
-function validateOperand(tok, usedTables, errors, ctx) {
-  if (isLiteral(tok)) return;
-
-  if (tok.includes(".")) {
-    const [tableRef, field] = tok.split(".");
-    const tableName = schemaKey(tableRef);
-    if (!tableName) {
-      errors.push(
-        `Tabela '${tableRef}' não existe no modelo (cláusula ${ctx}).`,
-      );
-      return;
-    }
-
-    const declared = usedTables.some(
-      (t) => String(t.name).toUpperCase() === String(tableName).toUpperCase(),
-    );
-    if (!declared) {
-      errors.push(
-        `Tabela '${tableRef}' não foi declarada no FROM/JOIN (cláusula ${ctx}).`,
-      );
-      return;
-    }
-
-    if (
-      !SCHEMA[tableName].fields.some(
-        (f) => f.toUpperCase() === field.toUpperCase(),
-      )
-    ) {
-      errors.push(
-        `Atributo '${field}' não existe na tabela '${tableName}' (cláusula ${ctx}).`,
-      );
-    }
-    return;
-  }
-
-  if (isIdentifier(tok) && !isReserved(tok)) {
-    const matches = findTablesContainingAttribute(tok, usedTables);
-
-    if (matches.length === 0) {
-      errors.push(
-        `Atributo '${tok}' não encontrado nas tabelas declaradas (cláusula ${ctx}).`,
-      );
-      return;
-    }
-
-    if (matches.length > 1) {
-      errors.push(
-        `Atributo '${tok}' é ambíguo na cláusula ${ctx}. Use ${matches
-          .map((tableName) => `${tableName}.${tok}`)
-          .join(" ou ")}.`,
-      );
-    }
-  }
-}
-
 // ═══════════════════════════════════════════════════════
 //  EXTRAÇÃO E VALIDAÇÃO DE BLOCOS JOIN
 //
@@ -500,7 +437,7 @@ function extractAndValidateJoins(sql, usedTables, errors) {
 
   // Para cada bloco de JOIN encontrado, extrai tabela e condição ON
   while ((jm = joinBlockRe.exec(sql)) !== null) {
-    // Exemplo de bloco JOIN: "Categoria ON Produto.Categoria_idCategoria = Categoria.idCategoria"
+    // Ex: "Categoria ON Produto.Categoria_idCategoria = Categoria.idCategoria"
     const block = jm[1].trim();
     // Valida estrutura básica do bloco JOIN: "Tabela [Apelido] ON Condição"
     const blockRe =
@@ -569,8 +506,7 @@ function extractAndValidateJoins(sql, usedTables, errors) {
     availableTables,
     errors,
   ) {
-    // Extrai as tabelas referenciadas por atributos qualificados na condição ON.
-    // Retorna as tabelas que estão sendo conectadas pela condição ON
+    // Extrai e retorna as tabelas referenciadas por atributos qualificados na condição ON.
     // Exemplo: ON Produto.Categoria_idCategoria = Categoria.idCategoria -> referenced = ["Produto", "Categoria"]
     const referenced = referencedTablesInExpression(onCond);
     const joinTableName = schemaKey(joinTable) || joinTable;

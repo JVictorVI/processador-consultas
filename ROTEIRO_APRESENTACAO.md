@@ -115,7 +115,7 @@ Valida condições de `WHERE` e `ON`. Ela confere:
 - uso correto de `AND`;
 - predicados separados corretamente;
 - operadores de comparação;
-- operandos válidos.
+- presença dos operandos.
 
 ```js
 validateAtom(atom, usedTables, errors, ctx)
@@ -126,17 +126,6 @@ Valida uma comparação individual, por exemplo:
 ```sql
 Produto.Preco > 50
 ```
-
-```js
-validateOperand(tok, usedTables, errors, ctx)
-```
-
-Verifica se cada operando é:
-
-- número;
-- texto;
-- atributo simples;
-- atributo qualificado com tabela.
 
 ```js
 extractAndValidateJoins(sql, usedTables, errors)
