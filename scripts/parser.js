@@ -1,8 +1,3 @@
-/* ═══════════════════════════════════════════════════════
-   PROCESSADOR DE CONSULTAS SQL — HU1
-   parser.js — Validação e parsing da consulta SQL sem suporte a apelidos de tabela
-   Depende de: schema.js
-═══════════════════════════════════════════════════════ */
 "use strict";
 
 // ═══════════════════════════════════════════════════════
@@ -97,7 +92,7 @@ function parse(rawSQL) {
   if (errors.length > 0) {
     return {
       errors,
-      tokens: tokenize(sql), // tokeniza mesmo com erros para facilitar depuração visual
+      tokens: tokenize(sql),
       usedTables: [],
       parsed: null,
     };
@@ -143,9 +138,8 @@ function parse(rawSQL) {
   // ── 4) Extração de tabelas declaradas ─────────────────
   const usedTables = [];
 
-  // Tabela base (FROM) — apelidos de tabela não são suportados.
+  // Tabela base (FROM)
   const fromM = sql.match(
-    // se tiver algo depois do ? é pq eh um AS sem suporte, ex: FROM Vendas AS v
     /\bFROM\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s+([A-Za-z_][A-Za-z0-9_]*))?(?=\s+JOIN\b|\s+WHERE\b|\s*$)/i,
   );
   if (fromM) {
@@ -167,6 +161,7 @@ function parse(rawSQL) {
   }
 
   // Pré-extrai tabelas dos JOINs para permitir validação de condições ON.
+  // Ex: JOIN Vendas v ON ... ou JOIN Vendas ON ...
   const joinTableRe =
     /\bJOIN\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s+([A-Za-z_][A-Za-z0-9_]*))?\s+ON\b/gi;
   let jam;
@@ -192,6 +187,7 @@ function parse(rawSQL) {
   }
 
   // ── 5) Balanceamento global de parênteses ─────────────
+  // Exemplo de erro: SELECT * FROM Vendas WHERE (Valor > 100
   let depth = 0;
   for (const ch of sql) {
     if (ch === "(") depth++;
@@ -224,16 +220,19 @@ function parse(rawSQL) {
     "Apelidos de tabela com 'AS'",
   ];
 
+  // Se algum erro estrutural grave foi detectado, interrompe a validação.
   if (errors.some((e) => structKeywords.some((k) => e.includes(k)))) {
     return { errors, tokens: rawToks, usedTables, parsed: null };
   }
 
   // ── 6) Valida atributos no SELECT ────────────────────
+  // Captura o que está entre SELECT e FROM para validação de atributos.
+  // Exemplo: SELECT id, Nome FROM Produto → selM[1] = "id, Nome"
   const selM = sql.match(/\bSELECT\s+([\s\S]+?)\s+\bFROM\b/i);
   if (selM) {
     const colsPart = selM[1].trim();
     if (colsPart !== "*") {
-      // Detecta atributos duplicados (case-insensitive)
+      // Detecta atributos duplicados
       const seen = new Set();
       colsPart
         .split(",")
@@ -241,6 +240,7 @@ function parse(rawSQL) {
         .forEach((col) => {
           if (!col) return;
 
+          // Retorna no formato Tabela.Atributo
           const key = canonicalSelectAttr(col, usedTables);
 
           if (seen.has(key)) {
@@ -250,12 +250,12 @@ function parse(rawSQL) {
           }
         });
 
-      // Valida existência de cada atributo
       colsPart
         .split(",")
         .map((c) => c.trim())
         .forEach((col) => {
           if (!col) return;
+          // Verficaa se o atributo é qualificado com tabela (Tabela.Atributo)
           if (col.includes(".")) {
             const [tableRef, f] = col.split(".");
             const tk = schemaKey(tableRef);
@@ -281,7 +281,10 @@ function parse(rawSQL) {
             ) {
               errors.push(`Atributo '${f}' não existe na tabela '${tk}'.`);
             }
-          } else if (/^[A-Za-z_]/.test(col)) {
+          }
+
+          // Verifica se o atributo é um nome simples  e tenta resolver unicamente entre as tabelas usadas.
+          else if (/^[A-Za-z_]/.test(col)) {
             const matches = findTablesContainingAttribute(col, usedTables);
 
             if (matches.length === 0) {
@@ -301,6 +304,7 @@ function parse(rawSQL) {
   }
 
   // ── 7) Valida blocos JOIN individualmente ─────────────
+  // Após a extracão das tabelas utlizadas, cada bloco JOIN é extraído e validado individualmente
   const joins = extractAndValidateJoins(sql, usedTables, errors);
 
   // ── 8) Valida condição WHERE ──────────────────────────

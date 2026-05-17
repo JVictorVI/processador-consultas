@@ -2,7 +2,9 @@
 //  UTILITÁRIOS LÉXICOS
 // ═══════════════════════════════════════════════════════
 
-/** Retorna nome canônico da tabela no schema (case-insensitive) ou null */
+/** Retorna nome canônico da tabela no schema ou null
+ * Ex: "vendas" -> "Vendas", "VENdas" -> "Vendas", "Venda" -> null
+ */
 function schemaKey(name) {
   return (
     Object.keys(SCHEMA).find((k) => k.toUpperCase() === name.toUpperCase()) ||
@@ -16,11 +18,13 @@ function isReserved(word) {
 }
 
 /** Verifica se um token é literal aceitável como operando (número ou string) */
+// Ex: 123, 45.67, 'Texto', 'Outro texto'
 function isLiteral(tok) {
   return /^\d+(\.\d+)?$/.test(tok) || /^'[^']*'$/.test(tok);
 }
 
 /** Verifica se um token é um identificador simples (não reservado, não literal) */
+// Ex: Nome, ClienteID, Data_Venda
 function isIdentifier(tok) {
   return /^[A-Za-z_][A-Za-z0-9_]*$/.test(tok) && !isLiteral(tok);
 }
@@ -30,6 +34,7 @@ function isIdentifier(tok) {
 // ═══════════════════════════════════════════════════════
 
 /** Normaliza a consulta para o subconjunto aceito pelo trabalho. */
+// Remove ponto-e-vírgula final, remove espaços.
 function cleanSqlInput(sql) {
   return String(sql || "")
     .replace(/;\s*$/, "")
@@ -37,25 +42,38 @@ function cleanSqlInput(sql) {
     .trim();
 }
 
+// ══════════════════════════════════════════════════════
+// EXTRAÇÃO DE COMPONENTES DA CONSULTA
+// Pega o SQL em texto e gera uma estrutura organizada com SELECT, FROM, JOIN e WHERE
+// Os JOINs podem ser pré-validados e passados como argumento.
+// ══════════════════════════════════════════════════════
 function extractParsed(sql, usedTables, validatedJoins = null) {
   sql = cleanSqlInput(sql);
+
+  // Extrai colunas do SELECT
   const selM = sql.match(/\bSELECT\s+([\s\S]+?)\s+\bFROM\b/i);
+  // Se não encontrar, assume SELECT *
   const selectCols = selM ? selM[1].trim() : "*";
 
+  // Extrai tabela do FROM
   const frM = sql.match(
     /\bFROM\s+([A-Za-z_][A-Za-z0-9_]*)(?=\s+JOIN\b|\s+WHERE\b|\s*$)/i,
   );
+
+  // Tenta resolver nome da tabela contra o schema, mas mantém forma textual se não encontrar.
   const fromTable = frM ? schemaKey(frM[1]) || frM[1] : null;
+
+  // Extrai blocos de JOIN pré-validados ou, se não fornecidos, tenta extrair diretamente da string SQL.
   const joins = Array.isArray(validatedJoins) ? [...validatedJoins] : [];
+
+  // Se não foram pré-validados, tenta extrair diretamente da string SQL.
   if (!joins.length) {
     const joinBlockRe =
       /\bJOIN\s+([\s\S]+?)(?=\s+\bJOIN\b|\s+\bWHERE\b|\s*$)/gi;
     let jm;
     while ((jm = joinBlockRe.exec(sql)) !== null) {
       const block = jm[1].trim();
-      const bm = block.match(
-        /^([A-Za-z_][A-Za-z0-9_]*)\s+ON\s+([\s\S]+)$/i,
-      );
+      const bm = block.match(/^([A-Za-z_][A-Za-z0-9_]*)\s+ON\s+([\s\S]+)$/i);
       if (bm) {
         const table = schemaKey(bm[1]) || bm[1];
         joins.push({ table, condition: bm[2].trim() });
@@ -63,12 +81,17 @@ function extractParsed(sql, usedTables, validatedJoins = null) {
     }
   }
 
+  // Extrai condição do WHERE
   const whereM = sql.match(/\bWHERE\s+([\s\S]+)$/i);
+  // Se não encontrar, assume condição nula (sem WHERE)
   const whereCond = whereM ? whereM[1].trim() : null;
 
   return { selectCols, fromTable, joins, whereCond, usedTables };
 }
 
+// ══════════════════════════════════════════════════════
+//  TOKENIZADOR — gera lista de tokens para exibição
+// ══════════════════════════════════════════════════════
 function tokenize(sql) {
   const toks = [];
   const re =
@@ -78,6 +101,7 @@ function tokenize(sql) {
   return toks;
 }
 
+// Classifica um token para fins de exibição: palavra-chave, tabela, atributo, operador ou outro.
 function classifyTok(tok) {
   const u = tok.toUpperCase();
   if (["SELECT", "FROM", "WHERE", "JOIN", "ON", "AND"].includes(u))
@@ -128,34 +152,46 @@ function validateCondition(condRaw, usedTables, errors, ctx) {
       }
     }
   }
+
   if (depth > 0) {
     errors.push(`Parênteses desbalanceados na cláusula ${ctx}.`);
     return;
   }
 
   // ── AND em posições inválidas ─────────────────────
+  // Ex: AND no início: WHERE AND Nome = 'Ana'
   if (/^\s*AND\b/i.test(cond)) {
     errors.push(`Conectivo AND em posição inválida na cláusula ${ctx}.`);
     return;
   }
+
+  // Ex: AND no fim: WHERE Nome = 'Ana' AND
   if (/\bAND\s*$/i.test(cond)) {
     errors.push(`Conectivo AND em posição inválida na cláusula ${ctx}.`);
     return;
   }
+
+  // Ex: AND duplicado: WHERE Nome = 'Ana' AND AND TipoCliente_idTipoCliente = 1
   if (/\bAND\s+AND\b/i.test(cond)) {
     errors.push(`Conectivo AND duplicado na cláusula ${ctx}.`);
     return;
   }
+
+  // Ex: AND após '(': WHERE (AND Nome = 'Ana')
   if (/\(\s*AND\b/i.test(cond)) {
     errors.push(`Conectivo AND em posição inválida na cláusula ${ctx}.`);
     return;
   }
+
+  // Ex: AND antes de ')': WHERE (Nome = 'Ana' AND TipoCliente_idTipoCliente = 1 AND)
   if (/\bAND\s*\)/i.test(cond)) {
     errors.push(`Conectivo AND em posição inválida na cláusula ${ctx}.`);
     return;
   }
 
-  // ── Divide por AND e valida cada parte ───────────
+  // ── Divide por AND FORA de parênteses e valida cada parte ───────────
+  // Ex: WHERE Nome = 'Ana' AND TipoCliente_idTipoCliente = 1
+  // partes: ["Nome = 'Ana'", "TipoCliente_idTipoCliente = 1"]
   const parts = splitByAnd(cond);
 
   if (parts.length === 0) {
@@ -163,13 +199,11 @@ function validateCondition(condRaw, usedTables, errors, ctx) {
     return;
   }
 
+  // Valida cada parte atômica da condição, que deve ser uma comparação simples.
   parts.forEach((part) => validateAtom(part.trim(), usedTables, errors, ctx));
 }
 
-/**
- * Divide uma condição pelos AND de nível superior
- * (respeita parênteses: AND dentro de () não é separador)
- */
+// Divide uma condição por AND, respeitando o balanceamento de parênteses.
 function splitByAnd(cond) {
   const parts = [];
   let depth = 0,
@@ -187,6 +221,8 @@ function splitByAnd(cond) {
       i++;
       continue;
     }
+
+    // Encontra AND fora de parênteses e garante que não é parte de outro token (ex: "AND" em "SANDWICH").
     if (depth === 0 && upper.slice(i, i + 3) === "AND") {
       const before = i === 0 || /\W/.test(cond[i - 1]);
       const after = i + 3 >= cond.length || /\W/.test(cond[i + 3]);
@@ -205,6 +241,8 @@ function splitByAnd(cond) {
   return parts;
 }
 
+// Valida um predicado atômico, que deve ser da forma "operando operador operando",
+// Como "Nome = 'Ana'" ou "Produto.Preco > 50".
 function validateAtom(atom, usedTables, errors, ctx) {
   if (!atom) {
     errors.push(`Condição vazia na cláusula ${ctx}.`);
@@ -218,10 +256,9 @@ function validateAtom(atom, usedTables, errors, ctx) {
     expr = expr.slice(1, -1).trim();
   }
 
-  // Correção: se após remover parênteses ainda existir AND em nível superior,
-  // valida cada predicado interno separadamente.
   // Exemplo: (Nome = 'Ana' AND CPF = '123')
   const innerParts = splitByAnd(expr);
+
   if (innerParts.length > 1) {
     innerParts.forEach((part) =>
       validateAtom(part.trim(), usedTables, errors, ctx),
@@ -229,11 +266,13 @@ function validateAtom(atom, usedTables, errors, ctx) {
     return;
   }
 
+  //; Exemplo: AND Nome = 'Ana' (AND no início)
   if (/^\s*AND\b/i.test(expr)) {
     errors.push(`Conectivo AND em posição inválida na cláusula ${ctx}.`);
     return;
   }
 
+  // Exemplo: Nome = 'Ana' AND (AND no fim)
   if (/\bAND\s*$/i.test(expr)) {
     errors.push(`Conectivo AND em posição inválida na cláusula ${ctx}.`);
     return;
@@ -270,8 +309,10 @@ function validateAtom(atom, usedTables, errors, ctx) {
   let opIdx = -1;
 
   for (const op of CMP_OPS) {
+    // Procura o operador na expressão
     const idx = findOperatorIndex(expr, op);
     if (idx !== -1) {
+      // Quando houver operadores parecidos, o maior seja escolhido primeiro, como >= em vez de >.
       if (opFound === null || op.length > opFound.length) {
         opFound = op;
         opIdx = idx;
@@ -286,8 +327,9 @@ function validateAtom(atom, usedTables, errors, ctx) {
     return;
   }
 
-  const left = expr.slice(0, opIdx).trim();
-  const right = expr.slice(opIdx + opFound.length).trim();
+  // Divide a expressão em operando esquerdo e direito com base no operador encontrado.
+  const left = expr.slice(0, opIdx).trim(); //  Exemplo: "Produto.Preco > 50" -> left = "Produto.Preco"
+  const right = expr.slice(opIdx + opFound.length).trim(); // Exemplo: "Produto.Preco > 50" -> right = "50"
 
   if (!left) {
     errors.push(
@@ -306,6 +348,7 @@ function validateAtom(atom, usedTables, errors, ctx) {
   }
 }
 
+// Procura quais tabelas usadas na consulta possuem o atributo indicado, para validação de operandos simples.
 function findTablesContainingAttribute(attr, usedTables) {
   return usedTables
     .map((t) => schemaKey(t.name))
@@ -317,6 +360,8 @@ function findTablesContainingAttribute(attr, usedTables) {
     );
 }
 
+// Retorna lista de tabelas referenciadas por atributos qualificados dentro de uma expressão condicional
+// (ON ou WHERE).
 function referencedTablesInExpression(expr) {
   const refs = new Set();
   const re = /\b([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\b/g;
@@ -332,7 +377,7 @@ function referencedTablesInExpression(expr) {
 
 /**
  * Verifica se a string está totalmente envolvida por um par de parênteses
- * Ex: "(a = b)" → true,  "(a) = (b)" → false
+ * Ex: "(a = b)" -> true,  "(a) = (b)" -> false
  */
 function isWrapped(s) {
   if (!s.startsWith("(")) return false;
@@ -348,7 +393,7 @@ function isWrapped(s) {
 }
 
 /**
- * Encontra o índice do operador de comparação em nível de parêntese 0.
+ * Procura qual operador de comparação existe dentro de uma condição.
  * Garante que o operador não está dentro de parênteses.
  */
 function findOperatorIndex(expr, op) {
@@ -363,7 +408,10 @@ function findOperatorIndex(expr, op) {
       depth--;
       continue;
     }
+
     if (depth === 0 && expr.slice(i, i + op.length) === op) {
+      // Evita confundir > com >=, por exemplo.
+      // Se encontrar >, verifica se o próximo caractere forma um operador maior.
       if ((op === ">" || op === "<") && i + op.length < expr.length) {
         const next = expr[i + op.length];
         if (next === "=" || next === ">") continue;
@@ -376,12 +424,9 @@ function findOperatorIndex(expr, op) {
 
 /**
  * Valida um único operando de uma comparação:
- * - número ou string literal → sempre válido
- * - Tabela.campo → valida tabela declarada e campo no schema
- * - identificador isolado → valida nas tabelas declaradas
- *
- * Observação: apelidos de tabela foram removidos do escopo do projeto. Portanto,
- * o prefixo antes do ponto deve ser sempre o nome real da tabela.
+ * - número ou string literal -> sempre válido
+ * - Tabela.campo -> valida tabela declarada e campo no schema
+ * - identificador isolado -> valida nas tabelas declaradas
  */
 function validateOperand(tok, usedTables, errors, ctx) {
   if (isLiteral(tok)) return;
@@ -442,23 +487,28 @@ function validateOperand(tok, usedTables, errors, ctx) {
 //  EXTRAÇÃO E VALIDAÇÃO DE BLOCOS JOIN
 //
 //  Cada JOIN é validado individualmente:
-//  - tabela presente e existente no schema
-//  - apelido de tabela não permitido
 //  - ON presente e com condição não vazia
 //  - condição ON validada com validateCondition()
 // ═══════════════════════════════════════════════════════
 function extractAndValidateJoins(sql, usedTables, errors) {
   const joins = [];
+
+  // Considera casos de múltiplos JOINs e garante que cada bloco seja extraído corretamente
   const joinBlockRe = /\bJOIN\s+([\s\S]+?)(?=\s+\bJOIN\b|\s+\bWHERE\b|\s*$)/gi;
   let jm;
   const availableTables = [...usedTables];
 
+  // Para cada bloco de JOIN encontrado, extrai tabela e condição ON
   while ((jm = joinBlockRe.exec(sql)) !== null) {
+    // Exemplo de bloco JOIN: "Categoria ON Produto.Categoria_idCategoria = Categoria.idCategoria"
     const block = jm[1].trim();
+    // Valida estrutura básica do bloco JOIN: "Tabela [Apelido] ON Condição"
     const blockRe =
       /^([A-Za-z_][A-Za-z0-9_]*)(?:\s+([A-Za-z_][A-Za-z0-9_]*))?\s+ON\s+([\s\S]+)$/i;
     const bm = block.match(blockRe);
 
+    // Se não casar, é um JOIN malformado. Tenta extrair o nome da tabela para uma mensagem de erro mais informativa.
+    // Ex: "JOIN Categoria Preco > 50"
     if (!bm) {
       const tblOnly = block.match(/^([A-Za-z_][A-Za-z0-9_]*)/);
       const tblName = tblOnly ? tblOnly[1] : "(desconhecida)";
@@ -484,6 +534,7 @@ function extractAndValidateJoins(sql, usedTables, errors) {
     }
 
     if (!onCond) {
+      // Ex: JOIN Pedido ON (condição ON vazia)
       errors.push(
         `Cláusula ON do JOIN com '${rawTable}' sem condição de junção.`,
       );
@@ -491,7 +542,11 @@ function extractAndValidateJoins(sql, usedTables, errors) {
     }
 
     validateCondition(onCond, usedTables, errors, "ON");
+
+    // Valida conectividade do JOIN: a condição ON deve referenciar atributos qualificados
+    // que conectem a tabela do JOIN a pelo menos uma tabela já disponível (FROM ou JOINs anteriores).
     validateJoinConnectivity(onCond, canonicalTable, availableTables, errors);
+
     joins.push({
       table: canonicalTable,
       condition: onCond,
@@ -507,15 +562,21 @@ function extractAndValidateJoins(sql, usedTables, errors) {
     }
   }
 
+  // Valida conectividade do JOIN: a condição ON deve referenciar atributos qualificados
   function validateJoinConnectivity(
     onCond,
     joinTable,
     availableTables,
     errors,
   ) {
+    // Extrai as tabelas referenciadas por atributos qualificados na condição ON.
+    // Retorna as tabelas que estão sendo conectadas pela condição ON
+    // Exemplo: ON Produto.Categoria_idCategoria = Categoria.idCategoria -> referenced = ["Produto", "Categoria"]
     const referenced = referencedTablesInExpression(onCond);
     const joinTableName = schemaKey(joinTable) || joinTable;
 
+    // Verifica se a condição ON referencia algum atributo qualificado.
+    // Exemplo de erro: JOIN Categoria ON Preco > 50
     if (!referenced.length) {
       errors.push(
         `Cláusula ON do JOIN com '${joinTableName}' deve referenciar atributos qualificados das tabelas envolvidas. Exemplo: ${joinTableName}.campo = OutraTabela.campo.`,
@@ -523,11 +584,15 @@ function extractAndValidateJoins(sql, usedTables, errors) {
       return;
     }
 
+    // Verifica se a condição ON referencia a tabela do JOIN
+    // Exemplo de erro: JOIN Categoria ON Produto.Categoria_idCategoria = 1
     const referencesJoinTable = referenced.some(
       (tableName) =>
         String(tableName).toUpperCase() === String(joinTableName).toUpperCase(),
     );
 
+    // Verifica se a condição ON referencia pelo menos uma tabela já disponível (FROM ou JOINs anteriores)
+    // Exemplo de erro: JOIN Categoria ON Categoria.idCategoria = 1 (sem referência a Produto ou outra tabela do FROM/JOIN anterior)
     const referencesPreviousTable = referenced.some((tableName) =>
       availableTables.some(
         (t) => String(t.name).toUpperCase() === String(tableName).toUpperCase(),
@@ -544,12 +609,13 @@ function extractAndValidateJoins(sql, usedTables, errors) {
   return joins;
 }
 
+// Retorna forma canônica de um atributo do SELECT, tentando resolver contra as tabelas usadas.
 function canonicalSelectAttr(col, usedTables) {
   const raw = col.trim();
 
   if (!raw) return raw.toUpperCase();
 
-  // atributo qualificado: Tabela.campo
+  // Atributo qualificado: tenta resolver tabela contra o schema, mas mantém forma textual se não encontrar.
   if (raw.includes(".")) {
     const [tableRef, f] = raw.split(".");
     const tk = schemaKey(tableRef);
@@ -558,6 +624,7 @@ function canonicalSelectAttr(col, usedTables) {
   }
 
   // atributo simples: tentar resolver unicamente nas tabelas declaradas
+  // Verifica se existe em alguma tabela usada na consulta
   const matches = usedTables.filter((t) => {
     const tk = schemaKey(t.name);
     return (
@@ -568,11 +635,13 @@ function canonicalSelectAttr(col, usedTables) {
     );
   });
 
+  // Se encontrar exatamente uma tabela que contenha o atributo, retorna na forma Tabela.Atributo.
   if (matches.length === 1) {
     const tk = schemaKey(matches[0].name) || matches[0].name;
     return `${String(tk).toUpperCase()}.${raw.toUpperCase()}`;
   }
 
+  // Caso contrário, mantém forma textual para exibição e possível mensagem de erro posterior.
   // ambíguo ou não resolvido: mantém forma textual
   return raw.toUpperCase();
 }
