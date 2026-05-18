@@ -12,23 +12,6 @@ function schemaKey(name) {
   );
 }
 
-/** Verifica se uma palavra é reservada */
-function isReserved(word) {
-  return RESERVED.has(word.toUpperCase());
-}
-
-/** Verifica se um token é literal aceitável como operando (número ou string) */
-// Ex: 123, 45.67, 'Texto', 'Outro texto'
-function isLiteral(tok) {
-  return /^\d+(\.\d+)?$/.test(tok) || /^'[^']*'$/.test(tok);
-}
-
-/** Verifica se um token é um identificador simples (não reservado, não literal) */
-// Ex: Nome, ClienteID, Data_Venda
-function isIdentifier(tok) {
-  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(tok) && !isLiteral(tok);
-}
-
 // ═══════════════════════════════════════════════════════
 //  TOKENIZADOR — gera lista de tokens para exibição
 // ═══════════════════════════════════════════════════════

@@ -84,45 +84,6 @@ const FK_FIELDS = [
   "Produto_idProduto",
 ];
 
-// Palavras-chave SQL reservadas neste trabalho
-const RESERVED = new Set([
-  "SELECT",
-  "FROM",
-  "WHERE",
-  "JOIN",
-  "ON",
-  "AND",
-  "AS",
-  "INNER",
-  "LEFT",
-  "RIGHT",
-  "FULL",
-  "OUTER",
-  "OR",
-  "NOT",
-  "LIKE",
-  "IN",
-  "BETWEEN",
-  "IS",
-  "GROUP",
-  "ORDER",
-  "BY",
-  "HAVING",
-  "DISTINCT",
-  "LIMIT",
-  "UNION",
-  "INTERSECT",
-  "EXCEPT",
-  "INSERT",
-  "UPDATE",
-  "DELETE",
-  "COUNT",
-  "SUM",
-  "AVG",
-  "MIN",
-  "MAX",
-]);
-
 // Operadores de comparação suportados (ordem: maior → menor, evita ambiguidade)
 const CMP_OPS = ["<>", ">=", "<=", "=", ">", "<"];
 

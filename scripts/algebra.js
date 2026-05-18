@@ -131,6 +131,7 @@ function toAlgebra(parsed) {
 
 // ─────────────────────────────────────────────────────
 //  AST → texto plano / HTML
+// formata a expressão da árvore de consulta para exibição, com quebras e espaçamento
 // ─────────────────────────────────────────────────────
 function treeToText(n) {
   if (!n) return "";
@@ -150,6 +151,7 @@ function treeToText(n) {
   }
 }
 
+// Gera HTML para a árvore de consulta, com formatação e destaque de chaves estrangeiras
 function treeToHtml(n) {
   if (!n) return "";
   const e = (s) =>
@@ -195,17 +197,20 @@ function treeToHtml(n) {
   }
 }
 
+// Gera rótulo para uma relação, usando o nome canônico da tabela
 function relLabel(n) {
   if (!n) return "";
   return n.name;
 }
 
+// Cópia profunda de objetos (para evitar mutações acidentais durante otimizações)
 function deepCopy(o) {
   return JSON.parse(JSON.stringify(o));
 }
 
 // ═══════════════════════════════════════════════════════
 //  HU4 — OTIMIZAÇÃO REAL DA ÁRVORE DE CONSULTA
+// Retorna a árvore otimizada e os passos intermediários para visualização
 // ═══════════════════════════════════════════════════════
 function optimizeTree(tree) {
   if (!tree) return { optimizedTree: null, optSteps: [] };
@@ -272,6 +277,7 @@ function optimizeTree(tree) {
 
 // ─────────────────────────────────────────────────────
 //  Extração de σ no topo: π(σc(J)) → c + J
+//  extrai condições de σ no topo da árvore para análise e reatribuição posterior
 // ─────────────────────────────────────────────────────
 function extractTopSigma(node) {
   const conds = [];
@@ -287,14 +293,17 @@ function extractTopSigma(node) {
   return { inner: current, conds };
 }
 
+// Extrai nomes de tabelas referenciadas em uma expressão (condição ou projeção)
 function referencedTables(expr) {
   return referencedTablesInExpression(expr);
 }
 
+// Determina se uma condição pode ser atribuída exclusivamente a uma única relação, para empurrar seleções
 function conditionBelongsToSingleRelation(cond, relations = []) {
   return !!inferSingleRelationForCondition(cond, relations);
 }
 
+// Tenta inferir a qual relação uma condição pertence, retornando a relação se for unicamente identificável
 function inferSingleRelationForCondition(cond, relations = []) {
   const refs = referencedTables(cond);
 
@@ -336,6 +345,7 @@ function inferSingleRelationForCondition(cond, relations = []) {
   return matches.length === 1 ? matches[0] : null;
 }
 
+// Coleta todas as relações (nós do tipo "rel") presentes na árvore para análise de condições e otimizações
 function collectRelations(node, list = []) {
   if (!node) return list;
   if (node.type === "rel") list.push(node);
@@ -345,10 +355,12 @@ function collectRelations(node, list = []) {
   return list;
 }
 
+// Retorna os nomes das tabelas presentes na árvore, para análise de dependências
 function tableNamesInTree(node) {
   return collectRelations(node).map((r) => r.name);
 }
 
+// Redução de Tuplas: Heurística de empurrar seleções para baixo da árvore, próximo às relações, quando possível
 function pushSelectionsToRelations(node, whereConds, steps) {
   if (!node) return { tree: node, appliedConds: new Set() };
 
@@ -404,6 +416,7 @@ function pushSelectionsToRelations(node, whereConds, steps) {
   };
 }
 
+// Coleta condições de junção (equi ou theta) para análise e possível reatribuição
 function collectJoinConditions(node, list = []) {
   if (!node) return list;
   if (node.type === "equi" || node.type === "theta") list.push(node.cond);
@@ -413,6 +426,8 @@ function collectJoinConditions(node, list = []) {
   return list;
 }
 
+// Determina quais atributos são necessários em cada relação para o resultado final,
+// considerando SELECT, WHERE e JOINs, para aplicar projeções intermediárias
 function collectRequiredAttributes(tree, finalAttrs) {
   const required = {};
   const rels = collectRelations(tree);
@@ -513,7 +528,8 @@ function collectSigmaConditions(node, list = []) {
   if (node.right) collectSigmaConditions(node.right, list);
   return list;
 }
-
+// Heurística de redução de campos: depois das seleções,
+// mantém somente atributos necessários ao SELECT final, WHERE e JOIN
 function applyIntermediateProjections(node, finalAttrs, steps) {
   const required = collectRequiredAttributes(node, finalAttrs);
 
@@ -563,6 +579,7 @@ function applyIntermediateProjections(node, finalAttrs, steps) {
   return visit(deepCopy(node));
 }
 
+// Relações com seleções próximas recebem score maior para priorização em reordenação de joins
 function relationScore(node) {
   if (!node) return 0;
   if (node.type === "sigma") return 10 + relationScore(node.inner);
@@ -571,6 +588,8 @@ function relationScore(node) {
   return 0;
 }
 
+// Heurística de reordenação de joins: tenta colocar relações com seleções próximas
+// no lado esquerdo das junções para evidenciar a execução mais restritiva primeiro
 function reorderJoinTree(node, steps) {
   function visit(n) {
     if (!n) return n;

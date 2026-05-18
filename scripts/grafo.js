@@ -5,6 +5,7 @@
 ═══════════════════════════════════════════════════════ */
 "use strict";
 
+// Função para escapar caracteres HTML
 function escHtml(s) {
   return String(s)
     .replace(/&/g, "&amp;")
@@ -12,6 +13,7 @@ function escHtml(s) {
     .replace(/>/g, "&gt;");
 }
 
+// Função para formatar rótulos de nós, quebrando linhas em condições complexas
 function formatGraphLabel(value, type) {
   const text = String(value || "")
     .replace(/\s+/g, " ")
@@ -41,23 +43,31 @@ function formatGraphLabel(value, type) {
 
   return text;
 }
-
+// Gera um grafo de operadores a partir da árvore de consulta (AST)
 function astToGraph(tree) {
   let counter = 0;
   const nodes = [];
   const edges = [];
 
+  // Função para gerar rótulos de nós, destacando chaves estrangeiras
   function nodeLabel(n) {
     switch (n.type) {
-      case "pi": return `π  ${n.attrs}`;
-      case "sigma": return `σ  ${n.cond}`;
-      case "equi": return `⋈  ${n.cond}`;
-      case "theta": return `⋈θ  ${n.cond}`;
-      case "rel": return typeof relLabel === "function" ? relLabel(n) : n.name;
-      default: return n.type;
+      case "pi":
+        return `π  ${n.attrs}`;
+      case "sigma":
+        return `σ  ${n.cond}`;
+      case "equi":
+        return `⋈  ${n.cond}`;
+      case "theta":
+        return `⋈θ  ${n.cond}`;
+      case "rel":
+        return typeof relLabel === "function" ? relLabel(n) : n.name;
+      default:
+        return n.type;
     }
   }
 
+  // Visita recursiva na árvore para construir os nós e arestas do grafo
   function visit(node) {
     if (!node) return null;
     const id = `n${++counter}`;
@@ -65,15 +75,18 @@ function astToGraph(tree) {
 
     if (node.inner) {
       const childId = visit(node.inner);
-      if (childId) edges.push({ from: childId, to: id, kind: "intermediate_result" });
+      if (childId)
+        edges.push({ from: childId, to: id, kind: "intermediate_result" });
     }
     if (node.left) {
       const leftId = visit(node.left);
-      if (leftId) edges.push({ from: leftId, to: id, kind: "intermediate_result" });
+      if (leftId)
+        edges.push({ from: leftId, to: id, kind: "intermediate_result" });
     }
     if (node.right) {
       const rightId = visit(node.right);
-      if (rightId) edges.push({ from: rightId, to: id, kind: "intermediate_result" });
+      if (rightId)
+        edges.push({ from: rightId, to: id, kind: "intermediate_result" });
     }
     return id;
   }
@@ -82,21 +95,31 @@ function astToGraph(tree) {
   return { nodes, edges, rootId };
 }
 
+// Metadados para tipos de nós, definindo classes CSS, símbolos e funções de rótulo
 const NODE_META = {
   pi: { cls: "node-pi", symbol: "π", labelFn: (n) => n.attrs },
   sigma: { cls: "node-sigma", symbol: "σ", labelFn: (n) => n.cond },
   equi: { cls: "node-join", symbol: "⋈", labelFn: (n) => n.cond },
   theta: { cls: "node-join", symbol: "⋈θ", labelFn: (n) => n.cond },
-  rel: { cls: "node-rel", symbol: null, labelFn: (n) => typeof relLabel === "function" ? relLabel(n) : n.name },
+  rel: {
+    cls: "node-rel",
+    symbol: null,
+    labelFn: (n) => (typeof relLabel === "function" ? relLabel(n) : n.name),
+  },
 };
 
+// Gera o HTML para um nó do grafo, incluindo seus filhos e conexões
 function buildGraphHtml(node) {
   if (!node) return "";
   const meta = NODE_META[node.type] || NODE_META.rel;
   const rawLabel = meta.labelFn(node) || "";
   const label = formatGraphLabel(rawLabel, node.type);
-  const symbolHtml = meta.symbol ? `<span class="tree-symbol">${escHtml(meta.symbol)}</span>` : "";
-  const labelHtml = label ? `<span class="tree-label">${escHtml(label)}</span>` : "";
+  const symbolHtml = meta.symbol
+    ? `<span class="tree-symbol">${escHtml(meta.symbol)}</span>`
+    : "";
+  const labelHtml = label
+    ? `<span class="tree-label">${escHtml(label)}</span>`
+    : "";
   const box = `<div class="tree-box ${meta.cls}">${symbolHtml}${labelHtml}</div>`;
 
   if (node.type === "rel") return `<div class="tree-node">${box}</div>`;
@@ -129,9 +152,12 @@ function buildGraphHtml(node) {
 
   return `<div class="tree-node">${box}</div>`;
 }
-
+// Ajusta o nível de zoom do grafo com base na quantidade de nós para melhor visualização
 function getGraphZoomClass(graphOrTree) {
-  const count = graphOrTree && Array.isArray(graphOrTree.nodes) ? graphOrTree.nodes.length : 0;
+  const count =
+    graphOrTree && Array.isArray(graphOrTree.nodes)
+      ? graphOrTree.nodes.length
+      : 0;
 
   if (count >= 28) return "graph-zoom-xs";
   if (count >= 20) return "graph-zoom-sm";
@@ -139,6 +165,8 @@ function getGraphZoomClass(graphOrTree) {
   return "graph-zoom-default";
 }
 
+// Função principal para renderizar o grafo a partir da árvore de consulta,
+// incluindo tabelas de nós e arestas para referência
 function renderGrafo(tree, graph) {
   const treeHtml = buildGraphHtml(tree);
 
@@ -150,7 +178,9 @@ function renderGrafo(tree, graph) {
     rel: "Relação",
   };
 
-  const nodesRows = graph.nodes.map((n) => `<tr>
+  const nodesRows = graph.nodes
+    .map(
+      (n) => `<tr>
       <td class="gt-id">${escHtml(n.id)}</td>
       <td class="gt-type gt-type-${n.type}">${escHtml(typeLabel[n.type] || n.type)}</td>
       <td class="gt-label">${escHtml(n.label)}</td>
@@ -161,14 +191,20 @@ function renderGrafo(tree, graph) {
             ? '<span class="gt-badge gt-leaf">folha</span>'
             : '<span class="gt-badge gt-inner">interno</span>'
       }</td>
-    </tr>`).join("");
+    </tr>`,
+    )
+    .join("");
 
-  const edgesRows = graph.edges.map((ed) => `<tr>
+  const edgesRows = graph.edges
+    .map(
+      (ed) => `<tr>
       <td class="gt-id">${escHtml(ed.from)}</td>
       <td class="gt-arrow">→</td>
       <td class="gt-id">${escHtml(ed.to)}</td>
       <td class="gt-kind">resultado intermediário</td>
-    </tr>`).join("");
+    </tr>`,
+    )
+    .join("");
 
   let h = `<div class="animate-in">`;
   h += `<div class="graph-reading-hint">
